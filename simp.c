@@ -25,11 +25,9 @@ struct tex_s {
 } g_textures[16];
 #define FRAMEBUFFER g_textures[0]
 
-unsigned char raster[RH][RW][4];
-
 void rlSaveFrame(const char* name) {
   Color* pxs = FRAMEBUFFER.texture;
-  stbi_write_png(name, RW, RH, 4, pxs, RW * 4);
+  stbi_write_png(name, FRAMEBUFFER.width, FRAMEBUFFER.height, 4, pxs, FRAMEBUFFER.width * 4);
 }
 
 #define RL_LINES 0x0001     // GL_LINES
@@ -57,13 +55,22 @@ void rlColor4ub(unsigned char r, unsigned char g, unsigned char b, unsigned char
 }
 static bool g_depth_test = true;
 void rlDisableDepthTest(void) { g_depth_test = false; }
-void rlDisableFramebuffer()        { *(volatile int*)0; }
-void rlDisableScissorTest()        { *(volatile int*)0; }
+void rlDisableFramebuffer(void) {
+  printf("Disable Framebuffer...\n");
+}
+static bool g_scissor_enabled = true;
+void rlDisableScissorTest(void) {
+  g_scissor_enabled = false;
+}
 void rlDisableStereoRender()       { *(volatile int*)0; }
 void rlDrawRenderBatchActive()     { }
 void rlEnableDepthTest(void) { g_depth_test = true; }
-void rlEnableFramebuffer()         { *(volatile int*)0; }
-void rlEnableScissorTest()         { *(volatile int*)0; }
+void rlEnableFramebuffer(int framebuffer) {
+  printf("Enabling framebuffer: %d\n", framebuffer);
+}
+void rlEnableScissorTest(void) {
+  g_scissor_enabled = true;
+}
 void rlEnableShader()              { *(volatile int*)0; }
 void rlEnableStereoRender()        { *(volatile int*)0; }
 typedef struct {
@@ -97,7 +104,36 @@ double rlGetCullDistanceFar(void) { return rlCullDistanceFar; }
 double rlGetCullDistanceNear(void) { return rlCullDistanceNear; }
 void rlGetLocationAttrib()         { *(volatile int*)0; }
 void rlGetLocationUniform()        { *(volatile int*)0; }
-void rlGetPixelFormatName()        { *(volatile int*)0; }
+const char* rlGetPixelFormatName(int format) {
+    switch (format)
+    {
+        case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: return "GRAYSCALE"; break;         // 8 bit per pixel (no alpha)
+        case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: return "GRAY_ALPHA"; break;       // 8*2 bpp (2 channels)
+        case PIXELFORMAT_UNCOMPRESSED_R5G6B5: return "R5G6B5"; break;               // 16 bpp
+        case PIXELFORMAT_UNCOMPRESSED_R8G8B8: return "R8G8B8"; break;               // 24 bpp
+        case PIXELFORMAT_UNCOMPRESSED_R5G5B5A1: return "R5G5B5A1"; break;           // 16 bpp (1 bit alpha)
+        case PIXELFORMAT_UNCOMPRESSED_R4G4B4A4: return "R4G4B4A4"; break;           // 16 bpp (4 bit alpha)
+        case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8: return "R8G8B8A8"; break;           // 32 bpp
+        case PIXELFORMAT_UNCOMPRESSED_R32: return "R32"; break;                     // 32 bpp (1 channel - float)
+        case PIXELFORMAT_UNCOMPRESSED_R32G32B32: return "R32G32B32"; break;         // 32*3 bpp (3 channels - float)
+        case PIXELFORMAT_UNCOMPRESSED_R32G32B32A32: return "R32G32B32A32"; break;   // 32*4 bpp (4 channels - float)
+        case PIXELFORMAT_UNCOMPRESSED_R16: return "R16"; break;                     // 16 bpp (1 channel - half float)
+        case PIXELFORMAT_UNCOMPRESSED_R16G16B16: return "R16G16B16"; break;         // 16*3 bpp (3 channels - half float)
+        case PIXELFORMAT_UNCOMPRESSED_R16G16B16A16: return "R16G16B16A16"; break;   // 16*4 bpp (4 channels - half float)
+        case PIXELFORMAT_COMPRESSED_DXT1_RGB: return "DXT1_RGB"; break;             // 4 bpp (no alpha)
+        case PIXELFORMAT_COMPRESSED_DXT1_RGBA: return "DXT1_RGBA"; break;           // 4 bpp (1 bit alpha)
+        case PIXELFORMAT_COMPRESSED_DXT3_RGBA: return "DXT3_RGBA"; break;           // 8 bpp
+        case PIXELFORMAT_COMPRESSED_DXT5_RGBA: return "DXT5_RGBA"; break;           // 8 bpp
+        case PIXELFORMAT_COMPRESSED_ETC1_RGB: return "ETC1_RGB"; break;             // 4 bpp
+        case PIXELFORMAT_COMPRESSED_ETC2_RGB: return "ETC2_RGB"; break;             // 4 bpp
+        case PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA: return "ETC2_RGBA"; break;       // 8 bpp
+        case PIXELFORMAT_COMPRESSED_PVRT_RGB: return "PVRT_RGB"; break;             // 4 bpp
+        case PIXELFORMAT_COMPRESSED_PVRT_RGBA: return "PVRT_RGBA"; break;           // 4 bpp
+        case PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA: return "ASTC_4x4_RGBA"; break;   // 8 bpp
+        case PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA: return "ASTC_8x8_RGBA"; break;   // 2 bpp
+        default: return "UNKNOWN"; break;
+    }
+}
 void rlGetShaderIdDefault()        { *(volatile int*)0; }
 void rlGetShaderLocsDefault()      { *(volatile int*)0; }
 int rlGetVersion()                { return 3; }
@@ -107,7 +143,9 @@ void rlLoadExtensions(func_t func) {
   extensions_func_g = func;
 }
 
-void rlLoadFramebuffer()           { *(volatile int*)0; }
+int rlLoadFramebuffer() {
+  return 0;
+}
 void rlLoadIdentity() { 
   ACTIVE_MATRIX = rlMatrixIdentity();
 }
@@ -118,7 +156,8 @@ static void* copy_texture(const void* data, size_t num_elements, int kind) {
   switch (kind) {
     case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: el_size = 1; break;
     case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: el_size = 2; break;
-    default: *(volatile int*)0;
+    case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8: el_size = 4; break;
+    default: printf("Unknown texture format: %d\n", kind); *(volatile int*)0;
   }
   void* ret = malloc(num_elements * el_size);
   memcpy(ret, data, num_elements * el_size);
@@ -146,11 +185,64 @@ void rlPopMatrix() { --g_matrix_stacks_index[g_matrix_active]; }
 void rlPushMatrix() { ++g_matrix_stacks_index[g_matrix_active]; ACTIVE_MATRIX = g_matrix_stacks[g_matrix_active][g_matrix_stacks_index[g_matrix_active] - 1]; }
 void rlReadScreenPixels()          { *(volatile int*)0; }
 void rlReadTexturePixels()         { *(volatile int*)0; }
-void rlRotatef()                   { *(volatile int*)0; }
-void rlScissor()                   { *(volatile int*)0; }
+void rlRotatef(float angle, float x, float y, float z) { 
+  Matrix matRotation = rlMatrixIdentity();
+  // Axis vector (x, y, z) normalization
+  float lengthSquared = x*x + y*y + z*z;
+  if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f))
+  {
+      float inverseLength = 1.0f/sqrtf(lengthSquared);
+      x *= inverseLength;
+      y *= inverseLength;
+      z *= inverseLength;
+  }
+
+  // Rotation matrix generation
+  float sinres = sinf(DEG2RAD*angle);
+  float cosres = cosf(DEG2RAD*angle);
+  float t = 1.0f - cosres;
+
+  matRotation.m0 = x*x*t + cosres;
+  matRotation.m1 = y*x*t + z*sinres;
+  matRotation.m2 = z*x*t - y*sinres;
+  matRotation.m3 = 0.0f;
+
+  matRotation.m4 = x*y*t - z*sinres;
+  matRotation.m5 = y*y*t + cosres;
+  matRotation.m6 = z*y*t + x*sinres;
+  matRotation.m7 = 0.0f;
+
+  matRotation.m8 = x*z*t + y*sinres;
+  matRotation.m9 = y*z*t - x*sinres;
+  matRotation.m10 = z*z*t + cosres;
+  matRotation.m11 = 0.0f;
+
+  matRotation.m12 = 0.0f;
+  matRotation.m13 = 0.0f;
+  matRotation.m14 = 0.0f;
+  matRotation.m15 = 1.0f;
+  ACTIVE_MATRIX = rlMatrixMultiply(matRotation, ACTIVE_MATRIX);
+}
+
+// Rectangle, 4 components
+typedef struct {
+    int x;      // Rectangle top-left corner position x
+    int y;      // Rectangle top-left corner position y
+    int width;  // Rectangle width
+    int height; // Rectangle height
+} br_irectangle;
+br_irectangle g_scissor;
+
+void rlScissor(int x, int y, int width, int height) {
+  g_scissor = (br_irectangle) { x, y, width, height };
+}
 void rlSetBlendMode()              { *(volatile int*)0; }
-void rlSetFramebufferHeight()      { *(volatile int*)0; }
-void rlSetFramebufferWidth()       { *(volatile int*)0; }
+void rlSetFramebufferHeight(int height) {
+  FRAMEBUFFER.height = height;
+}
+void rlSetFramebufferWidth(int width) {
+  FRAMEBUFFER.width = width;
+}
 void rlSetMatrixProjectionStereo() { *(volatile int*)0; }
 void rlSetMatrixViewOffsetStereo() { *(volatile int*)0; }
 void rlSetShader()                 { *(volatile int*)0; }
@@ -183,7 +275,9 @@ void rlUnloadTexture(int id) {
 void rlUpdateTexture()             { *(volatile int*)0; }
 
 void rlActiveTextureSlot() { *(volatile int*)0; }
-void rlColor3f() { *(volatile int*)0; }
+void rlColor3f(float r, float g, float b) {
+  g_color = (Color) { r * 255.f, g * 255.f, b * 255.f, g_color.a };
+}
 void rlDisableBackfaceCulling() { *(volatile int*)0; }
 void rlDisableShader() { *(volatile int*)0; }
 void rlDisableTexture() { *(volatile int*)0; }
@@ -218,7 +312,16 @@ void rlIsStereoRenderEnabled() { *(volatile int*)0; }
 void rlLoadVertexArray() { *(volatile int*)0; }
 void rlLoadVertexBuffer() { *(volatile int*)0; }
 void rlLoadVertexBufferElement() { *(volatile int*)0; }
-void rlScalef() { *(volatile int*)0; }
+void rlScalef(float x, float y, float z) {
+    Matrix matScale = {
+        x, 0.0f, 0.0f, 0.0f,
+        0.0f, y, 0.0f, 0.0f,
+        0.0f, 0.0f, z, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+
+    ACTIVE_MATRIX = rlMatrixMultiply(matScale, ACTIVE_MATRIX);
+}
 void rlSetMatrixModelview() { *(volatile int*)0; }
 void rlSetMatrixProjection() { *(volatile int*)0; }
 void rlSetVertexAttribute() { *(volatile int*)0; }
@@ -269,20 +372,15 @@ void rlVertex2f(float x, float y) {
   };
   br_try_pop_vertexies();
 }
-// Rectangle, 4 components
-typedef struct {
-    int x;      // Rectangle top-left corner position x
-    int y;      // Rectangle top-left corner position y
-    int width;  // Rectangle width
-    int height; // Rectangle height
-} br_irectangle;
 
 br_irectangle g_viewport;
 void rlViewport(int x, int y, int width, int height) {
   g_viewport = (br_irectangle){ x, y, width, height };
   printf("Setting viewport to: %d %d %d %d\n", x, y, width, height);
 }
-void rlglClose(void) {}
+void rlglClose(void) {
+  rlSaveFrame("done.png");
+}
 
 int g_rlgl_width, g_rlgl_height;
 void rlglInit(unsigned int width, unsigned int height) {
@@ -360,11 +458,13 @@ void glfwMakeContextCurrent(void* window_handle) {
 }
 void glfwMaximizeWindow() {*(volatile int*)0;}
 void glfwPollEvents(void) {}
-void glfwRawMouseMotionSupported() {*(volatile int*)0;}
+int glfwRawMouseMotionSupported() { return false; }
 void glfwRestoreWindow() {*(volatile int*)0;}
 void glfwSetClipboardString() {*(volatile int*)0;}
 void glfwSetCursor() {*(volatile int*)0;}
-void glfwSetCursorPos() {*(volatile int*)0;}
+void glfwSetCursorPos(void* monitor_handle, int x, int y) {
+
+}
 void glfwSetInputMode(void* monitor_handle, int modes, bool value) {
   printf("Setting input modes %d to: %d\n", modes, value);
 }
@@ -380,7 +480,9 @@ void glfwSetWindowPos(void* monitor_handle, int x, int y) {
 bool g_should_close;
 void glfwSetWindowShouldClose(bool should) { g_should_close = should; }
 void glfwSetWindowSize() {*(volatile int*)0;}
-void glfwSetWindowSizeLimits() {*(volatile int*)0;}
+void glfwSetWindowSizeLimits(int width, int height) {
+  printf("Min size: %d, %d\n", width, height);
+}
 void glfwSetWindowTitle() {*(volatile int*)0;}
 void glfwShowWindow() {*(volatile int*)0;}
 void glfwSwapBuffers(void* monitor_handle) {}
@@ -479,15 +581,15 @@ Color br_sample_texture(struct tex_s* tex, float x, float y) {
   switch (tex->format) {
     case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: {
       unsigned char* t = tex->texture;
-      return (Color) { t[index], t[index], t[index], 255 };
+      return (Color) { g_color.r * t[index], g_color.g * t[index], g_color.b * t[index], 255 };
     } break;
     case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: {
       struct { unsigned char c, a; } *t = tex->texture;
-      return (Color) { t[index].c, t[index].c, t[index].c, t[index].a };
+      return (Color) { g_color.r * t[index].c, g_color.g * t[index].c, g_color.b * t[index].c, t[index].a };
     } break;
     default: {
-      *(volatile int*)0;
       printf("Unknown texture format: %d\n", tex->format);
+      *(volatile int*)0;
     } break;
   }
   return BLACK;
@@ -585,7 +687,7 @@ static void br_draw_line(struct tex_s tex, const vertex_t* a, const vertex_t* b)
       }
     }
   } else {
-    *(volatile int*)0;
+    printf("Failed to draw line: %f,%f %f,%f\n", from.x, from.y, to.x, to.y);
   }
 }
 

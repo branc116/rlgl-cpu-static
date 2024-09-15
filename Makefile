@@ -18,7 +18,7 @@ build/simp.o: simp.c simp_math.h common.h
 	gcc $(FLAGS) -c -o build/simp.o simp.c
 
 
-RL_SRC= external/raylib/rcore.c external/raylib/rmodels.c external/raylib/rshapes.c external/raylib/rtext.c external/raylib/rtextures.c external/raylib/utils.c
+RL_SRC= external/raylib/rcore.c external/raylib/rmodels.c external/raylib/rshapes.c external/raylib/rtext.c external/raylib/rtextures.c external/raylib/utils.c external/raylib/raudio.c
 RL_SW_OBJS= $(patsubst external/raylib/%.c, build/%.sw.o, $(RL_SRC))
 RL_GL_OBJS= $(patsubst external/raylib/%.c, build/%.gl.o, $(RL_SRC))
 

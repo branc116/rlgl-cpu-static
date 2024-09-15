@@ -134,12 +134,19 @@ static void JoystickCallback(int jid, int event);                               
 // Module Functions Definition: Window and Graphics Device
 //----------------------------------------------------------------------------------
 
+void rlSaveFrame(const char* name);
 // Check if application should close
 // NOTE: By default, if KEY_ESCAPE pressed or window close icon clicked
 bool WindowShouldClose(void)
 {
-    if (CORE.Window.ready) return CORE.Window.shouldClose;
-    else return true;
+  static int frames_count = 1;
+  if (--frames_count < 0) {
+    rlSaveFrame("done.png");
+    return true;
+  }
+  printf("Frame count: %d\n", frames_count);
+  if (CORE.Window.ready) return CORE.Window.shouldClose;
+  else return true;
 }
 
 // Toggle fullscreen mode
