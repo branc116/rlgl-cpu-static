@@ -5,7 +5,6 @@
 #include "simp_math.h"
 #include "stdio.h"
 
-
 // gcc -ggdb -O3 -c -o rc.o -DPLATFORM_DESKTOP src/rcore.c & gcc -ggdb -O3 -c -o u.o  -DPLATFORM_DESKTOP src/utils.c & gcc -ggdb -O3 -c -o t.o  -DPLATFORM_DESKTOP src/rtext.c & gcc -ggdb -O3 -c -o tx.o -DPLATFORM_DESKTOP src/rtextures.c & gcc -ggdb -O3 -c -o s.o  -DPLATFORM_DESKTOP src/rshapes.c 
 // gcc -ggdb -fsanitize=address -DPLATFORM_DESKTOP simp.c rc.o u.o t.o tx.o s.o -lm
 // gcc -ggdb -fsanitize=address -DPLATFORM_DESKTOP simp.c rc.o u.o t.o tx.o s.o -lm && time ./a.out && imv -u nearest_neighbour clear.png
@@ -183,20 +182,27 @@ void rlVertex2f(float x, float y) {
   }
   else *(volatile int*)0;
 }
-int g_rlgl_viewport_x, g_rlgl_viewport_y, g_rlgl_viewport_width, g_rlgl_viewport_height;
+// Rectangle, 4 components
+typedef struct {
+    int x;      // Rectangle top-left corner position x
+    int y;      // Rectangle top-left corner position y
+    int width;  // Rectangle width
+    int height; // Rectangle height
+} br_irectangle;
+
+br_irectangle g_viewport;
 void rlViewport(int x, int y, int width, int height) {
-  int g_rlgl_viewport_x = x, g_rlgl_viewport_y = y, g_rlgl_viewport_width = width,
-      g_rlgl_viewport_height = height;
-  FRAMEBUFFER.width = width;
-  FRAMEBUFFER.height = height;
-  FRAMEBUFFER.texture = malloc(width * height * 4);
-  g_texture_index = 1;
+  g_viewport = (br_irectangle){ x, y, width, height };
   printf("Setting viewport to: %d %d %d %d\n", x, y, width, height);
 }
 void rlglClose(void) {}
 
 int g_rlgl_width, g_rlgl_height;
 void rlglInit(unsigned int width, unsigned int height) {
+  FRAMEBUFFER.width = width;
+  FRAMEBUFFER.height = height;
+  FRAMEBUFFER.texture = malloc(width * height * 4);
+  g_texture_index = 1;
   g_rlgl_width = width, g_rlgl_height = height;
   printf("Init rlgl to %d, %d\n", width, height);
 }
@@ -317,6 +323,14 @@ void glfwSetWindowIconifyCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowMaximizeCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowSizeCallback(void* monitor_h, func_t func) {}
 
+#define RL_MODELVIEW_I  0
+#define RL_PROJECTION_I 1
+
+void br_get_raster_point(Vector2 x, int* out_x, int* out_y) {
+  float pix_height = 2.f / g_viewport.height;
+  float pix_width = 2.f / g_viewport.width;
+  Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
+}
 
 static float br_clamp(float x, float m, float M) {
   if (x < m) return m;
@@ -333,12 +347,10 @@ static Vector2 br_clamp_v2(Vector2 x, float m, float M) {
 }
 
 static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
-  float pix_height = 2.f / tex.height;
-  float pix_width = 2.f / tex.width;
+  float pix_height = 2.f / g_viewport.height;
+  float pix_width = 2.f / g_viewport.width;
   Color* t = tex.texture;
   int t_cap = tex.width * tex.height;
-#define RL_MODELVIEW_I  0
-#define RL_PROJECTION_I 1
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
   from = br_clamp_v2(Vector2Transform(from, combined), -1.f, 1.f);
   to = br_clamp_v2(Vector2Transform(to, combined), -1.f, 1.f);
@@ -352,25 +364,25 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
   float dx = to.x - from.x;
   float dy = to.y - from.y;
   if (dx == 0) {
-    int x = (1.f + to.x) / 2 * tex.width;
+    int x = (1.f + to.x) / 2 * g_viewport.width + g_viewport.x;
     float min_y = fminf(to.y, from.y);
     float max_y = fmaxf(to.y, from.y);
     int pix_fill_count = (int)ceilf((max_y - min_y) / pix_height);
-    int y = (1.f - ((1.f + (max_y)) / 2.f)) * tex.height;
+    int y = (1.f - ((1.f + (max_y)) / 2.f)) * g_viewport.height + g_viewport.y;
     for (int i = 0; i < pix_fill_count; ++i) {
       int final_index = x + (i + y) * tex.width;
-      if (final_index > t_cap) continue;
+      if (final_index >= t_cap) continue;
       t[final_index] = g_color;
     }
   } else if (dy == 0) {
-    int y = (1.f - ((1.f + (to.y)) / 2.f)) * tex.height;
+    int y = (1.f - ((1.f + (to.y)) / 2.f)) * g_viewport.height + g_viewport.y;
     float min_x = fminf(to.x, from.x);
     float max_x = fmaxf(to.x, from.x);
     int pix_fill_count = (int)ceilf((max_x - min_x) / pix_width);
-    int x = (1.f + min_x) / 2 * tex.width;
+    int x = (1.f + min_x) / 2 * g_viewport.width + g_viewport.x;
     for (int i = 0; i < pix_fill_count; ++i) {
       int final_index = (x + i) + y * tex.width;
-      if (final_index > t_cap) continue;
+      if (final_index >= t_cap) continue;
       t[final_index] = g_color;
     }
   } else if (dx > 0) {
@@ -380,20 +392,20 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
     int sign_dy = from.y > to.y ? 1 : -1;
     int pix_fill_count_x = (int)ceilf((dx) / pix_width);
     int pix_fill_count_y = (int)ceilf(fabsf(dy) / pix_height);
-    int xi = (1.f + x_from) / 2 * tex.width;
-    int yi = (1.f - ((1.f + (from.y)) / 2.f)) * tex.height;
+    int xi = g_viewport.x + (1.f + x_from) / 2 * g_viewport.width;
+    int yi = g_viewport.y + (1.f - ((1.f + (from.y)) / 2.f)) * g_viewport.height;
     if (pix_fill_count_x > pix_fill_count_y) {
       for (int i = 0; i < pix_fill_count_x; ++i) {
         int yn = yi + sign_dy * ((pix_fill_count_y * i) / pix_fill_count_x);
         int final_index = (xi + i) + yn * tex.width;
-        if (final_index > t_cap) continue;
+        if (final_index >= t_cap) continue;
         t[final_index] = g_color;
       }
     } else {
       for (int i = 0; i < pix_fill_count_y; ++i) {
         int xn = xi + ((pix_fill_count_x * i) / pix_fill_count_y);
         int final_index = xn + (yi + sign_dy * i) * tex.width;
-        if (final_index > t_cap) continue;
+        if (final_index >= t_cap) continue;
         t[final_index] = g_color;
       }
     }
@@ -403,6 +415,14 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
 }
 
 static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) {
+//  float pix_height = 2.f / tex.height;
+//  float pix_width = 2.f / tex.width;
+//
+//  Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
+//  a = br_clamp_v2(Vector2Transform(a, combined), -1.f, 1.f);
+//  b = br_clamp_v2(Vector2Transform(b, combined), -1.f, 1.f);
+//  c = br_clamp_v2(Vector2Transform(c, combined), -1.f, 1.f);
+
   br_draw_line(tex, a, b);
   br_draw_line(tex, b, c);
   br_draw_line(tex, a, c);

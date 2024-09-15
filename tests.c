@@ -1,5 +1,6 @@
 #include "external/raylib/raylib.h"
 #include "external/raylib/raymath.h"
+#include "external/raylib/rlgl.h"
 #include "common.h"
 
 #include <stdio.h>
@@ -7,8 +8,7 @@
 #include <stdlib.h>
 
 #define TESTS(X) X(0) \
-  X(1) X(2) X(3) X(4) X(5)
-
+  X(1) X(2) X(3) X(4) X(5) X(6)
 
 void rlSaveFrame(const char* name);
 
@@ -63,6 +63,28 @@ void case5(void) {
   EndDrawing();
 }
 
+void case6(void) {
+  BeginDrawing();
+  ClearBackground(BLUE);
+  int lines[][4] = {
+    { 10, 1, 10, 100 },
+    { 10, 1, 15, 100 },
+  };
+  DrawRectangle(1, 1, RW/2, RH/2, YELLOW);
+  DrawRectangle(RW/2, RH/2, RW/2, RH/2, YELLOW);
+  for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
+    DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
+
+  rlViewport(0, 0, RW/2, RH/2);
+  for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
+    DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
+  DrawCircle(50, 50, 50, BLACK);
+  rlViewport(RW/2, RH/2, RW/2, RH/2);
+  for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
+    DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
+  DrawCircle(50, 50, 50, RED);
+  EndDrawing();
+}
 
 void run_all_cases(void) {
 #define X(c) do { case ## c (); rlSaveFrame("output/case" #c ".png"); } while (0);
@@ -78,7 +100,6 @@ case_t all_cases[] = {
 #undef X
 };
 
-#define CASE case3
 int main(int argc, char** argv) {
   InitWindow(RW, RH, "hi");
 
@@ -90,6 +111,11 @@ int main(int argc, char** argv) {
     char buff[32];
     sprintf(buff, "output/case%d.png", test_num);
     rlSaveFrame(buff); 
+  } else if (argc == 3) {
+    int test_num = atoi(argv[1]);
+    while(WindowShouldClose() == false) {
+      all_cases[test_num]();
+    }
   }
   CloseWindow();
   return 0;
