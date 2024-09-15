@@ -3,7 +3,9 @@
 
 #include "common.h"
 #include "simp_math.h"
-#include "stdio.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // gcc -ggdb -O3 -c -o rc.o -DPLATFORM_DESKTOP src/rcore.c & gcc -ggdb -O3 -c -o u.o  -DPLATFORM_DESKTOP src/utils.c & gcc -ggdb -O3 -c -o t.o  -DPLATFORM_DESKTOP src/rtext.c & gcc -ggdb -O3 -c -o tx.o -DPLATFORM_DESKTOP src/rtextures.c & gcc -ggdb -O3 -c -o s.o  -DPLATFORM_DESKTOP src/rshapes.c 
 // gcc -ggdb -fsanitize=address -DPLATFORM_DESKTOP simp.c rc.o u.o t.o tx.o s.o -lm
@@ -107,8 +109,20 @@ void rlLoadIdentity() {
 }
 void rlLoadShaderCode()            { *(volatile int*)0; }
 
+void* copy_texture(const void* data, size_t num_elements, int kind) {
+  size_t el_size = 0;
+  switch (kind) {
+    case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: el_size = 1; break;
+    case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: el_size = 2; break;
+    default: *(volatile int*)0;
+  }
+  void* ret = malloc(num_elements * el_size);
+  memcpy(ret, data, num_elements * el_size);
+  return ret;
+}
+
 void rlLoadTexture(void* data, int width, int height, int format, int mipmaps ) {
-  g_textures[g_texture_index++] = (struct tex_s) { g_textures, width, height, format, mipmaps };
+  g_textures[g_texture_index++] = (struct tex_s) { copy_texture(data, width * height, format), width, height, format, mipmaps };
 }
 void rlLoadTextureCubemap()        { *(volatile int*)0; }
 void rlLoadTextureDepth()          { *(volatile int*)0; }
@@ -155,9 +169,9 @@ void rlUnloadTexture(int id) {
 }
 void rlUpdateTexture()             { *(volatile int*)0; }
 
-static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to);
-static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c);
-static void br_draw_quad(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c, Vector2 d);
+static void br_draw_line(struct tex_s tex, const vertex_t* from, const vertex_t* to);
+static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c);
+static void br_draw_quad(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c, const vertex_t* d);
 void rlVertex2f(float x, float y) {
   g_vertexies[g_vertexies_index++] = (vertex_t) {
     .position = { x, y},
@@ -167,17 +181,17 @@ void rlVertex2f(float x, float y) {
   };
   if (g_vertexies_index == 1) return;
   else if (g_begin_mode == RL_LINES) {
-    br_draw_line(FRAMEBUFFER, g_vertexies[0].position, g_vertexies[1].position);
+    br_draw_line(FRAMEBUFFER, &g_vertexies[0], &g_vertexies[1]);
     g_vertexies_index = 0;
   }
   else if (g_vertexies_index == 2) return;
   else if (g_begin_mode == RL_TRIANGLES) {
-    br_draw_triangle(FRAMEBUFFER, g_vertexies[0].position, g_vertexies[1].position, g_vertexies[2].position);
+    br_draw_triangle(FRAMEBUFFER, &g_vertexies[0], &g_vertexies[1], &g_vertexies[2]);
     g_vertexies_index = 0;
   }
   else if (g_vertexies_index == 3) return;
   else if (g_begin_mode == RL_QUADS) {
-    br_draw_quad(FRAMEBUFFER, g_vertexies[0].position, g_vertexies[1].position, g_vertexies[2].position, g_vertexies[3].position);
+    br_draw_quad(FRAMEBUFFER, &g_vertexies[0], &g_vertexies[1], &g_vertexies[2], &g_vertexies[3]);
     g_vertexies_index = 0;
   }
   else *(volatile int*)0;
@@ -332,14 +346,14 @@ typedef struct {
   int x, y;
 } br_ivec2_t;
 
-void br_get_raster_point(Vector2 x, br_ivec2_t* out) {
+void br_get_raster_point(const vertex_t* x, br_ivec2_t* out) {
   float pix_height = 2.f / g_viewport.height;
   float pix_width = 2.f / g_viewport.width;
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
-  x = Vector2Transform(x, combined);
+  Vector2 y = Vector2Transform(x->position, combined);
 
-  out->x = (int)((x.x + 1.f) / 2.f * g_viewport.width);
-  out->y = (int)((1.f - ((x.y + 1.f) / 2.f)) * g_viewport.height);
+  out->x = (int)((y.x + 1.f) / 2.f * g_viewport.width);
+  out->y = (int)((1.f - ((y.y + 1.f) / 2.f)) * g_viewport.height);
 }
 
 static float br_clamp(float x, float m, float M) {
@@ -362,11 +376,58 @@ static Vector2 br_clamp_v2(Vector2 x, float m, float M) {
   if (final_x < (TEX).width) \
   if (final_y < (TEX).height) \
   if (final_x >= 0) \
-  if (final_y >= 0) \
-  ((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)] = g_color; \
+  if (final_y >= 0) { \
+    if (g_texture_active == 0) { \
+      ((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)] = g_color; \
+    } else { \
+      *(volatile int*)0; \
+    } \
+  } \
 } while (0)
 
-static void br_draw_point(struct tex_s tex, Vector2 x) {
+Color br_sample_texture(struct tex_s* tex, float x, float y) {
+  int xi = ((int)(tex->width * x + 0.5f)) % tex->width;
+  int yi = ((int)(tex->height * y + 0.5f)) % tex->height;
+  int index = xi + yi * tex->width;
+
+  switch (tex->format) {
+    case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: {
+      unsigned char* t = tex->texture;
+      return (Color) { t[index], t[index], t[index], 255 };
+    } break;
+    case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: {
+      struct { unsigned char c, a; } *t = tex->texture;
+      return (Color) { t[index].c, t[index].c, t[index].c, t[index].a };
+    } break;
+    default: {
+      *(volatile int*)0;
+      printf("Unknown texture format: %d\n", tex->format);
+    } break;
+  }
+  return BLACK;
+}
+
+void br_blend(Color* c, Color in) {
+  if (in.a >= c->a) *c = in;
+}
+
+#define SET_PIX_TEX(TEX, X, Y, TX, TY) do { \
+  int final_x = (X) + g_viewport.x; \
+  int final_y = (Y) + (TEX.height - g_viewport.height) - g_viewport.y; \
+  if (final_x < (TEX).width) \
+  if (final_y < (TEX).height) \
+  if (final_x >= 0) \
+  if (final_y >= 0) { \
+    if (g_texture_active != 0) { \
+      Color c = br_sample_texture(&g_textures[g_texture_active], TX, TY); \
+      br_blend(&((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)], c); \
+    } else { \
+      *(volatile int*)0; \
+    } \
+  } \
+} while (0)
+
+static void br_draw_point(struct tex_s tex, const vertex_t* x) {
   br_ivec2_t out;
   br_get_raster_point(x, &out);
   SET_PIX(tex, out.x, out.y);
@@ -377,10 +438,10 @@ static void br_draw_point(struct tex_s tex, Vector2 x) {
 #define GL_FILL 0x1B02
 int g_draw_mode = 0x1B02;
 
-static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
+static void br_draw_line(struct tex_s tex, const vertex_t* a, const vertex_t* b) {
   if (g_draw_mode == GL_POINT) {
-    br_draw_point(tex, from);
-    br_draw_point(tex, to);
+    br_draw_point(tex, a);
+    br_draw_point(tex, b);
     return;
   }
   float pix_height = 2.f / g_viewport.height;
@@ -388,8 +449,8 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
   Color* t = tex.texture;
   int t_cap = tex.width * tex.height;
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
-  from = br_clamp_v2(Vector2Transform(from, combined), -1.f, 1.f);
-  to = br_clamp_v2(Vector2Transform(to, combined), -1.f, 1.f);
+  Vector2 from = br_clamp_v2(Vector2Transform(a->position, combined), -1.f, 1.f);
+  Vector2 to = br_clamp_v2(Vector2Transform(b->position, combined), -1.f, 1.f);
 
   if (from.x > to.x) {
     Vector2 tmp = from;
@@ -458,7 +519,11 @@ static bool is_cw(br_ivec2_t a, br_ivec2_t b, br_ivec2_t c) {
   return false;
 }
 
-static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) {
+static float br_ivec2_dist(br_ivec2_t a, br_ivec2_t b) {
+  return sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c) {
   switch (g_draw_mode) {
     case GL_LINE:
       br_draw_line(tex, a, b);
@@ -485,15 +550,29 @@ static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) 
     bool apb = is_ccw(ai, p, bi);
     bool bpc = is_ccw(bi, p, ci);
     bool cpa = is_ccw(ci, p, ai);
-    if (apb == bpc && bpc == cpa) 
-    SET_PIX(tex, x, y);
+    if (apb == bpc && bpc == cpa) {
+      if (g_texture_active == 0) {
+        SET_PIX(tex, x, y);
+      } else {
+        float w1 = (bi.y-ci.y)*(p.x-ci.x)+(ci.x-bi.x)*(p.y-ci.y);
+        float w2 = (ci.y-ai.y)*(p.x-ci.x)+(ai.x-ci.x)*(p.y-ci.y);
+        float n = (bi.y-ci.y)*(ai.x-ci.x)+(ci.x-bi.x)*(ai.y-ci.y); 
+        w1 /= n;
+        w2 /= n;
+        Vector3 dists = { w1, w2, 1 - w1 - w2 };
+        Vector2 texture = Vector2Add(
+          Vector2Add(
+            Vector2Scale(a->tex_coord, dists.x),
+            Vector2Scale(b->tex_coord, dists.y)),
+          Vector2Scale(c->tex_coord, dists.z));
+        SET_PIX_TEX(tex, x, y, texture.x, texture.y);
+      }
+    }
   }
 }
 
-static void br_draw_quad(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c, Vector2 d) {
-  br_draw_line(tex, a, b);
-  br_draw_line(tex, b, c);
-  br_draw_line(tex, c, d);
-  br_draw_line(tex, d, a);
+static void br_draw_quad(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c, const vertex_t* d) {
+  br_draw_triangle(tex, a, b, c);
+  br_draw_triangle(tex, c, d, a);
 }
 

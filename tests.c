@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 #define TESTS(X) X(0) \
-  X(1) X(2) X(3) X(4) X(5) X(6) X(7)
+  X(1) X(2) X(3) X(4) X(5) X(6) X(7) X(8)
 
 void rlSaveFrame(const char* name);
 
@@ -40,7 +40,6 @@ void case3(void) {
   float length = 100; 
   int i = 0;
   for (float angle = 0.f; i < 64; ++i, angle += PI / 32) {
-    printf("angle: %f\n", angle);
     float s = sinf(angle), c = cosf(angle);
     Vector2 to = { c, -s }; 
     DrawLineV(f, Vector2Add(f, Vector2Scale(to, length)), YELLOW);
@@ -119,6 +118,13 @@ void case7(void) {
   EndDrawing();
 }
 
+void case8(void) {
+  BeginDrawing();
+  ClearBackground(BLUE);
+  DrawText("Hello From the case8", 10, 100, 23, BLACK);
+  EndDrawing();
+}
+
 void run_all_cases(void) {
 #define X(c) do { case ## c (); rlViewport(0,0,RW,RH); rlSaveFrame("output/case" #c ".png"); } while (0);
   TESTS(X)
@@ -150,9 +156,11 @@ int main(int argc, char** argv) {
     while(WindowShouldClose() == false) {
       rlViewport(0, 0, RW, RH);
       if (IsKeyPressed(KEY_J)) {
-        test_num = test_num == 0 ? 0 : (test_num - 1);
+        if (test_num == 0) {
+          test_num = (sizeof(all_cases) / sizeof(all_cases[0])) - 1;
+        } else test_num = (test_num - 1);
       } else if (IsKeyPressed(KEY_K)) {
-        test_num = test_num + 1 < (sizeof(all_cases) / sizeof(all_cases[0])) ? test_num + 1 : test_num;
+        test_num = test_num + 1 < (sizeof(all_cases) / sizeof(all_cases[0])) ? test_num + 1 : 0;
       }
       all_cases[test_num]();
     }
