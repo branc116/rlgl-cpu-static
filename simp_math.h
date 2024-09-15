@@ -77,3 +77,49 @@ static inline Matrix rlGetOrtho(double left, double right, double bottom, double
     return matOrtho;
 }
 
+static inline Matrix rlGetFrustum(double left, double right, double bottom, double top, double znear, double zfar) {
+    Matrix matFrustum = { 0 };
+
+    float rl = (float)(right - left);
+    float tb = (float)(top - bottom);
+    float fn = (float)(zfar - znear);
+
+    matFrustum.m0 = ((float) znear*2.0f)/rl;
+    matFrustum.m1 = 0.0f;
+    matFrustum.m2 = 0.0f;
+    matFrustum.m3 = 0.0f;
+
+    matFrustum.m4 = 0.0f;
+    matFrustum.m5 = ((float) znear*2.0f)/tb;
+    matFrustum.m6 = 0.0f;
+    matFrustum.m7 = 0.0f;
+
+    matFrustum.m8 = ((float)right + (float)left)/rl;
+    matFrustum.m9 = ((float)top + (float)bottom)/tb;
+    matFrustum.m10 = -((float)zfar + (float)znear)/fn;
+    matFrustum.m11 = -1.0f;
+
+    matFrustum.m12 = 0.0f;
+    matFrustum.m13 = 0.0f;
+    matFrustum.m14 = -((float)zfar*(float)znear*2.0f)/fn;
+    matFrustum.m15 = 0.0f;
+
+    return matFrustum;
+}
+
+static inline Vector4 Vector4Transform(Vector4 v, Matrix mat)
+{
+    Vector4 result = { 0 };
+
+    float x = v.x;
+    float y = v.y;
+    float z = v.z;
+    float w = v.w;
+
+    result.x = mat.m0*x + mat.m4*y + mat.m8*z + mat.m12*w;
+    result.y = mat.m1*x + mat.m5*y + mat.m9*z + mat.m13*w;
+    result.z = mat.m2*x + mat.m6*y + mat.m10*z + mat.m14*w;
+    result.w = mat.m3*x + mat.m7*y + mat.m11*z + mat.m15*w;
+
+    return result;
+}

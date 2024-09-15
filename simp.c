@@ -39,7 +39,7 @@ int g_begin_mode;
 void rlBegin(int mode) {
   g_begin_mode = mode;
 }
-Color g_clear_color;
+static Color g_clear_color;
 void rlClearColor(unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
   g_clear_color = (Color){ r, g, b, a };
 }
@@ -51,22 +51,23 @@ void rlClearScreenBuffers() {
     }
   }
 }
-Color g_color;
+static Color g_color;
 void rlColor4ub(unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
   g_color = (Color) { r, g, b, a };
 }
-void rlDisableDepthTest()          { *(volatile int*)0; }
+static bool g_depth_test = true;
+void rlDisableDepthTest(void) { g_depth_test = false; }
 void rlDisableFramebuffer()        { *(volatile int*)0; }
 void rlDisableScissorTest()        { *(volatile int*)0; }
 void rlDisableStereoRender()       { *(volatile int*)0; }
 void rlDrawRenderBatchActive()     { }
-void rlEnableDepthTest()           { *(volatile int*)0; }
+void rlEnableDepthTest(void) { g_depth_test = true; }
 void rlEnableFramebuffer()         { *(volatile int*)0; }
 void rlEnableScissorTest()         { *(volatile int*)0; }
 void rlEnableShader()              { *(volatile int*)0; }
 void rlEnableStereoRender()        { *(volatile int*)0; }
 typedef struct {
-  Vector2 position;
+  Vector3 position;
   Vector2 tex_coord;
   Vector3 normal_coord;
   Color color;
@@ -78,11 +79,22 @@ void rlEnd(void) {
 }
 void rlFramebufferAttach()         { *(volatile int*)0; }
 void rlFramebufferComplete()       { *(volatile int*)0; }
-void rlFrustum()                   { *(volatile int*)0; }
+#define RL_MODELVIEW  0x1700      // GL_MODELVIEW
+#define RL_PROJECTION 0x1701      // GL_PROJECTION
+#define RL_TEXTURE    0x1702      // GL_TEXTURE
+Matrix g_matrix_stacks[3][16];
+int g_matrix_stacks_index[3];
+int g_matrix_active;
+#define ACTIVE_MATRIX g_matrix_stacks[g_matrix_active][g_matrix_stacks_index[g_matrix_active]]
+void rlFrustum(double left, double right, double bottom, double top, double znear, double zfar) {
+  ACTIVE_MATRIX = rlMatrixMultiply(rlGetFrustum(left, right, bottom, top, znear, zfar), ACTIVE_MATRIX);
+}
 void rlGenTextureMipmaps()         { *(volatile int*)0; }
-void rlGetActiveFramebuffer()      { *(volatile int*)0; }
-void rlGetCullDistanceFar()        { *(volatile int*)0; }
-void rlGetCullDistanceNear()       { *(volatile int*)0; }
+int rlGetActiveFramebuffer(void) { return 1; }
+static double rlCullDistanceNear = 0.01;
+static double rlCullDistanceFar = 1000.0f;
+double rlGetCullDistanceFar(void) { return rlCullDistanceFar; }
+double rlGetCullDistanceNear(void) { return rlCullDistanceNear; }
 void rlGetLocationAttrib()         { *(volatile int*)0; }
 void rlGetLocationUniform()        { *(volatile int*)0; }
 void rlGetPixelFormatName()        { *(volatile int*)0; }
@@ -93,23 +105,15 @@ typedef void (*func_t)(void);
 func_t extensions_func_g;
 void rlLoadExtensions(func_t func) {
   extensions_func_g = func;
-
 }
 
 void rlLoadFramebuffer()           { *(volatile int*)0; }
-#define RL_MODELVIEW  0x1700      // GL_MODELVIEW
-#define RL_PROJECTION 0x1701      // GL_PROJECTION
-#define RL_TEXTURE    0x1702      // GL_TEXTURE
-Matrix g_matrix_stacks[3][16];
-int g_matrix_stacks_index[3];
-int g_matrix_active;
-#define ACTIVE_MATRIX g_matrix_stacks[g_matrix_active][g_matrix_stacks_index[g_matrix_active]]
 void rlLoadIdentity() { 
   ACTIVE_MATRIX = rlMatrixIdentity();
 }
 void rlLoadShaderCode()            { *(volatile int*)0; }
 
-void* copy_texture(const void* data, size_t num_elements, int kind) {
+static void* copy_texture(const void* data, size_t num_elements, int kind) {
   size_t el_size = 0;
   switch (kind) {
     case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: el_size = 1; break;
@@ -128,7 +132,7 @@ void rlLoadTextureCubemap()        { *(volatile int*)0; }
 void rlLoadTextureDepth()          { *(volatile int*)0; }
 void rlMatrixMode(int matrix) { g_matrix_active = matrix - RL_MODELVIEW; }
 void rlMultMatrixf(const float *mat) {
-  ACTIVE_MATRIX = rlMatrixMultiply(ACTIVE_MATRIX, floats_to_mat(mat));
+  ACTIVE_MATRIX = rlMatrixMultiply(floats_to_mat(mat), ACTIVE_MATRIX);
 }
 
 Vector3 g_normal;
@@ -136,10 +140,10 @@ void rlNormal3f(float x, float y, float z) {
   g_normal = (Vector3) { x, y, z };
 }
 void rlOrtho(double left, double right, double bottom, double top, double znear, double zfar) {
-  ACTIVE_MATRIX = rlMatrixMultiply(ACTIVE_MATRIX, rlGetOrtho(left, right, bottom, top, znear, zfar));
+  ACTIVE_MATRIX = rlMatrixMultiply(rlGetOrtho(left, right, bottom, top, znear, zfar), ACTIVE_MATRIX);
 }
-void rlPopMatrix()                 { *(volatile int*)0; }
-void rlPushMatrix()                { *(volatile int*)0; }
+void rlPopMatrix() { --g_matrix_stacks_index[g_matrix_active]; }
+void rlPushMatrix() { ++g_matrix_stacks_index[g_matrix_active]; ACTIVE_MATRIX = g_matrix_stacks[g_matrix_active][g_matrix_stacks_index[g_matrix_active] - 1]; }
 void rlReadScreenPixels()          { *(volatile int*)0; }
 void rlReadTexturePixels()         { *(volatile int*)0; }
 void rlRotatef()                   { *(volatile int*)0; }
@@ -161,7 +165,16 @@ void rlTexCoord2f(float x, float y) {
   g_tex_coord = (Vector2) { x, y };
 }
 void rlTextureParameters()         { *(volatile int*)0; }
-void rlTranslatef()                { *(volatile int*)0; }
+void rlTranslatef(float x, float y, float z) { 
+  Matrix matTranslation = {
+    1.0f, 0.0f, 0.0f, x,
+    0.0f, 1.0f, 0.0f, y,
+    0.0f, 0.0f, 1.0f, z,
+    0.0f, 0.0f, 0.0f, 1.0f
+  };
+
+  ACTIVE_MATRIX = rlMatrixMultiply(matTranslation, ACTIVE_MATRIX);
+}
 void rlUnloadFramebuffer()         { *(volatile int*)0; }
 void rlUnloadShaderProgram()       { *(volatile int*)0; }
 void rlUnloadTexture(int id) {
@@ -169,16 +182,56 @@ void rlUnloadTexture(int id) {
 }
 void rlUpdateTexture()             { *(volatile int*)0; }
 
+void rlActiveTextureSlot() { *(volatile int*)0; }
+void rlColor3f() { *(volatile int*)0; }
+void rlDisableBackfaceCulling() { *(volatile int*)0; }
+void rlDisableShader() { *(volatile int*)0; }
+void rlDisableTexture() { *(volatile int*)0; }
+void rlDisableTextureCubemap() { *(volatile int*)0; }
+void rlDisableVertexArray() { *(volatile int*)0; }
+void rlDisableVertexAttribute() { *(volatile int*)0; }
+void rlDisableVertexBuffer() { *(volatile int*)0; }
+void rlDisableVertexBufferElement() { *(volatile int*)0; }
+void rlDisableWireMode() { *(volatile int*)0; }
+void rlDrawVertexArray() { *(volatile int*)0; }
+void rlDrawVertexArrayElements() { *(volatile int*)0; }
+void rlDrawVertexArrayElementsInstanced() { *(volatile int*)0; }
+void rlDrawVertexArrayInstanced() { *(volatile int*)0; }
+void rlEnableBackfaceCulling() { *(volatile int*)0; }
+void rlEnablePointMode() { *(volatile int*)0; }
+void rlEnableTexture() { *(volatile int*)0; }
+void rlEnableTextureCubemap() { *(volatile int*)0; }
+void rlEnableVertexArray() { *(volatile int*)0; }
+void rlEnableVertexAttribute() { *(volatile int*)0; }
+void rlEnableVertexBuffer() { *(volatile int*)0; }
+void rlEnableVertexBufferElement() { *(volatile int*)0; }
+void rlEnableWireMode() { *(volatile int*)0; }
+void rlGetFramebufferHeight() { *(volatile int*)0; }
+void rlGetFramebufferWidth() { *(volatile int*)0; }
+void rlGetMatrixModelview() { *(volatile int*)0; }
+void rlGetMatrixProjection() { *(volatile int*)0; }
+void rlGetMatrixProjectionStereo() { *(volatile int*)0; }
+void rlGetMatrixTransform() { *(volatile int*)0; }
+void rlGetMatrixViewOffsetStereo() { *(volatile int*)0; }
+void rlGetTextureIdDefault() { *(volatile int*)0; }
+void rlIsStereoRenderEnabled() { *(volatile int*)0; }
+void rlLoadVertexArray() { *(volatile int*)0; }
+void rlLoadVertexBuffer() { *(volatile int*)0; }
+void rlLoadVertexBufferElement() { *(volatile int*)0; }
+void rlScalef() { *(volatile int*)0; }
+void rlSetMatrixModelview() { *(volatile int*)0; }
+void rlSetMatrixProjection() { *(volatile int*)0; }
+void rlSetVertexAttribute() { *(volatile int*)0; }
+void rlSetVertexAttributeDefault() { *(volatile int*)0; }
+void rlSetVertexAttributeDivisor() { *(volatile int*)0; }
+void rlUnloadVertexArray() { *(volatile int*)0; }
+void rlUnloadVertexBuffer() { *(volatile int*)0; }
+void rlUpdateVertexBuffer() { *(volatile int*)0; }
+
 static void br_draw_line(struct tex_s tex, const vertex_t* from, const vertex_t* to);
 static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c);
 static void br_draw_quad(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c, const vertex_t* d);
-void rlVertex2f(float x, float y) {
-  g_vertexies[g_vertexies_index++] = (vertex_t) {
-    .position = { x, y},
-    .tex_coord = g_tex_coord,
-    .normal_coord = g_normal,
-    .color = g_color
-  };
+static void br_try_pop_vertexies(void) {
   if (g_vertexies_index == 1) return;
   else if (g_begin_mode == RL_LINES) {
     br_draw_line(FRAMEBUFFER, &g_vertexies[0], &g_vertexies[1]);
@@ -195,6 +248,26 @@ void rlVertex2f(float x, float y) {
     g_vertexies_index = 0;
   }
   else *(volatile int*)0;
+}
+
+void rlVertex3f(float x, float y, float z) {
+  g_vertexies[g_vertexies_index++] = (vertex_t) {
+    .position = { x, y, z },
+    .tex_coord = g_tex_coord,
+    .normal_coord = g_normal,
+    .color = g_color
+  };
+  br_try_pop_vertexies();
+}
+
+void rlVertex2f(float x, float y) {
+  g_vertexies[g_vertexies_index++] = (vertex_t) {
+    .position = { x, y },
+    .tex_coord = g_tex_coord,
+    .normal_coord = g_normal,
+    .color = g_color
+  };
+  br_try_pop_vertexies();
 }
 // Rectangle, 4 components
 typedef struct {
@@ -350,7 +423,10 @@ void br_get_raster_point(const vertex_t* x, br_ivec2_t* out) {
   float pix_height = 2.f / g_viewport.height;
   float pix_width = 2.f / g_viewport.width;
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
-  Vector2 y = Vector2Transform(x->position, combined);
+  Vector4 v = { x->position.x, x->position.y, x->position.z, 1 };
+  Vector4 y = Vector4Transform(v, combined);
+  y.x /= y.w;
+  y.y /= y.w;
 
   out->x = (int)((y.x + 1.f) / 2.f * g_viewport.width);
   out->y = (int)((1.f - ((y.y + 1.f) / 2.f)) * g_viewport.height);
@@ -367,6 +443,16 @@ static Vector2 br_clamp_v2(Vector2 x, float m, float M) {
   else if (x.x > M) x.x = M;
   if      (x.y < m) x.y = m;
   else if (x.y > M) x.y = M;
+  return x;
+}
+
+static Vector3 br_clamp_v3(Vector3 x, float m, float M) {
+  if      (x.x < m) x.x = m;
+  else if (x.x > M) x.x = M;
+  if      (x.y < m) x.y = m;
+  else if (x.y > M) x.y = M;
+  if      (x.z < m) x.z = m;
+  else if (x.z > M) x.z = M;
   return x;
 }
 
@@ -449,11 +535,11 @@ static void br_draw_line(struct tex_s tex, const vertex_t* a, const vertex_t* b)
   Color* t = tex.texture;
   int t_cap = tex.width * tex.height;
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
-  Vector2 from = br_clamp_v2(Vector2Transform(a->position, combined), -1.f, 1.f);
-  Vector2 to = br_clamp_v2(Vector2Transform(b->position, combined), -1.f, 1.f);
+  Vector3 from = br_clamp_v3(Vector3Transform(a->position, combined), -1.f, 1.f);
+  Vector3 to = br_clamp_v3(Vector3Transform(b->position, combined), -1.f, 1.f);
 
   if (from.x > to.x) {
-    Vector2 tmp = from;
+    Vector3 tmp = from;
     from = to;
     to = tmp;
   }

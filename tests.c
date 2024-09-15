@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 #define TESTS(X) X(0) \
-  X(1) X(2) X(3) X(4) X(5) X(6) X(7) X(8)
+  X(1) X(2) X(3) X(4) X(5) X(6) X(7) X(8) X(9)
 
 void rlSaveFrame(const char* name);
 
@@ -125,6 +125,22 @@ void case8(void) {
   EndDrawing();
 }
 
+void case9(void) {
+  Camera camera = { 
+    .position = { 2.0f, 4.0f, 6.0f }, // Camera position
+    .target = { 0.0f, 0.5f, 0.0f },   // Camera looking at point
+    .up = { 0.0f, 1.0f, 0.0f },       // Camera up vector (rotation towards target)
+    .fovy = 55.0f,                    // Camera field-of-view Y
+    .projection = CAMERA_PERSPECTIVE, // Camera projection type
+  };
+  BeginDrawing();
+    ClearBackground(BLUE);
+    BeginMode3D(camera);
+      DrawCube(Vector3Zero(), 2.0, 4.0, 2.0, YELLOW);
+    EndMode3D();
+  EndDrawing();
+}
+
 void run_all_cases(void) {
 #define X(c) do { case ## c (); rlViewport(0,0,RW,RH); rlSaveFrame("output/case" #c ".png"); } while (0);
   TESTS(X)
@@ -170,3 +186,6 @@ int main(int argc, char** argv) {
 }
 
 __attribute__((weak)) void rlSaveFrame(const char* name) {}
+
+
+// ../../raysan5/raylib/examples
