@@ -328,11 +328,18 @@ void glfwSetWindowPosCallback(void* monitor_h, func_t func) {}
 
 #define RL_MODELVIEW_I  0
 #define RL_PROJECTION_I 1
+typedef struct {
+  int x, y;
+} br_ivec2_t;
 
-void br_get_raster_point(Vector2 x, int* out_x, int* out_y) {
+void br_get_raster_point(Vector2 x, br_ivec2_t* out) {
   float pix_height = 2.f / g_viewport.height;
   float pix_width = 2.f / g_viewport.width;
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
+  x = Vector2Transform(x, combined);
+
+  out->x = (int)((x.x + 1.f) / 2.f * g_viewport.width) + g_viewport.x;
+  out->y = (int)((1.f - ((x.y + 1.f) / 2.f)) * g_viewport.height) + g_viewport.y;
 }
 
 static float br_clamp(float x, float m, float M) {
@@ -349,7 +356,29 @@ static Vector2 br_clamp_v2(Vector2 x, float m, float M) {
   return x;
 }
 
+#define SET_PIX(TEX, x, y) do { \
+  if ((x) < (TEX).width) \
+  if ((y) < (TEX).height) \
+  ((Color*)(TEX).texture)[(x) + ((y) * (TEX).width)] = g_color; \
+} while (0)
+
+static void br_draw_point(struct tex_s tex, Vector2 x) {
+  br_ivec2_t out;
+  br_get_raster_point(x, &out);
+  SET_PIX(tex, out.x, out.y);
+}
+
+#define GL_POINT 0x1B00
+#define GL_LINE 0x1B01
+#define GL_FILL 0x1B02
+int g_draw_mode = 0x1B02;
+
 static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
+  if (g_draw_mode == GL_POINT) {
+    br_draw_point(tex, from);
+    br_draw_point(tex, to);
+    return;
+  }
   float pix_height = 2.f / g_viewport.height;
   float pix_width = 2.f / g_viewport.width;
   Color* t = tex.texture;
@@ -417,18 +446,52 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
   }
 }
 
-static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) {
-//  float pix_height = 2.f / tex.height;
-//  float pix_width = 2.f / tex.width;
-//
-//  Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
-//  a = br_clamp_v2(Vector2Transform(a, combined), -1.f, 1.f);
-//  b = br_clamp_v2(Vector2Transform(b, combined), -1.f, 1.f);
-//  c = br_clamp_v2(Vector2Transform(c, combined), -1.f, 1.f);
+static bool is_ccw(br_ivec2_t a, br_ivec2_t b, br_ivec2_t c) {
+  int sum = (a.x - b.x)*(a.y + b.y);
+  sum +=    (b.x - c.x)*(b.y + c.y);
+  sum +=    (c.x - a.x)*(c.y + a.y);
+  if (sum >= 0) return true;
+  return false;
+}
 
-  br_draw_line(tex, a, b);
-  br_draw_line(tex, b, c);
-  br_draw_line(tex, a, c);
+static bool is_cw(br_ivec2_t a, br_ivec2_t b, br_ivec2_t c) {
+  int sum = (a.x - b.x)*(a.y + b.y);
+  sum +=    (b.x - c.x)*(b.y + c.y);
+  sum +=    (c.x - a.x)*(c.y + a.y);
+  if (sum <= 0) return true;
+  return false;
+}
+
+static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) {
+  switch (g_draw_mode) {
+    case GL_LINE:
+      br_draw_line(tex, a, b);
+      br_draw_line(tex, b, c);
+      br_draw_line(tex, a, c);
+      return;
+    case GL_POINT:
+      br_draw_point(tex, a);
+      br_draw_point(tex, b);
+      br_draw_point(tex, c);
+      return;
+  }
+  float pix_height = 2.f / g_viewport.height;
+  float pix_width = 2.f / g_viewport.width;
+
+  br_ivec2_t ai, bi, ci;
+  br_get_raster_point(a, &ai);
+  br_get_raster_point(b, &bi);
+  br_get_raster_point(c, &ci);
+
+  for (int y = 0; y < g_viewport.height; ++y)
+  for (int x = 0; x < g_viewport.width; ++x) {
+    br_ivec2_t p = { x + g_viewport.x, y + g_viewport.y };
+    bool apb = is_ccw(ai, p, bi);
+    bool bpc = is_ccw(bi, p, ci);
+    bool cpa = is_ccw(ci, p, ai);
+    if (apb == bpc && bpc == cpa) 
+    SET_PIX(tex, x + g_viewport.x, y + g_viewport.y);
+  }
 }
 
 static void br_draw_quad(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c, Vector2 d) {

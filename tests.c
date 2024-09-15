@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 #define TESTS(X) X(0) \
-  X(1) X(2) X(3) X(4) X(5) X(6)
+  X(1) X(2) X(3) X(4) X(5) X(6) X(7)
 
 void rlSaveFrame(const char* name);
 
@@ -83,6 +83,36 @@ void case6(void) {
   for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
     DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
   DrawCircle(50, 50, 50, RED);
+  EndDrawing();
+}
+
+void case7(void) {
+  BeginDrawing();
+  ClearBackground(BLUE);
+
+  int rows = 3;
+  int cols = 4;
+  int count = rows * cols;
+  Vector2 angle_up = { 1, 0 };
+  for (int r = 0; r < rows; ++r) {
+    for (int c = 0; c < cols; ++c) {
+      float w = (float)RW / cols, h = (float)RH / rows;
+      rlViewport(c * (RW / cols), r * (RH / rows), w, h);
+      float rot = (c + 1) * (1 + r) * 0.1f;
+
+      Vector2 a = (Vector2) { cos(rot), -sin(rot) };
+      Vector2 b = Vector2Rotate(a, 2*PI/3);
+      Vector2 c = Vector2Rotate(b, 2*PI/3);
+      Vector2 arr[] = { a, b, c };
+      for (int i = 0; i < 3; ++i) {
+        arr[i] = Vector2Multiply(arr[i], (Vector2) { w, h });
+        arr[i] = Vector2Add(arr[i], (Vector2){ 3.f*w, 3.f*h });
+        arr[i] = Vector2Scale(arr[i], 0.5);
+      }
+
+      DrawTriangle(arr[0], arr[1], arr[2], YELLOW);
+    }
+  }
   EndDrawing();
 }
 
