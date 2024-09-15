@@ -338,8 +338,8 @@ void br_get_raster_point(Vector2 x, br_ivec2_t* out) {
   Matrix combined = MatrixMultiply(g_matrix_stacks[RL_MODELVIEW_I][g_matrix_stacks_index[RL_MODELVIEW_I]], g_matrix_stacks[RL_PROJECTION_I][g_matrix_stacks_index[RL_PROJECTION_I]]);
   x = Vector2Transform(x, combined);
 
-  out->x = (int)((x.x + 1.f) / 2.f * g_viewport.width) + g_viewport.x;
-  out->y = (int)((1.f - ((x.y + 1.f) / 2.f)) * g_viewport.height) + g_viewport.y;
+  out->x = (int)((x.x + 1.f) / 2.f * g_viewport.width);
+  out->y = (int)((1.f - ((x.y + 1.f) / 2.f)) * g_viewport.height);
 }
 
 static float br_clamp(float x, float m, float M) {
@@ -356,10 +356,14 @@ static Vector2 br_clamp_v2(Vector2 x, float m, float M) {
   return x;
 }
 
-#define SET_PIX(TEX, x, y) do { \
-  if ((x) < (TEX).width) \
-  if ((y) < (TEX).height) \
-  ((Color*)(TEX).texture)[(x) + ((y) * (TEX).width)] = g_color; \
+#define SET_PIX(TEX, X, Y) do { \
+  int final_x = (X) + g_viewport.x; \
+  int final_y = (Y) + (TEX.height - g_viewport.height) - g_viewport.y; \
+  if (final_x < (TEX).width) \
+  if (final_y < (TEX).height) \
+  if (final_x >= 0) \
+  if (final_y >= 0) \
+  ((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)] = g_color; \
 } while (0)
 
 static void br_draw_point(struct tex_s tex, Vector2 x) {
@@ -396,26 +400,22 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
   float dx = to.x - from.x;
   float dy = to.y - from.y;
   if (dx == 0) {
-    int x = (1.f + to.x) / 2 * g_viewport.width + g_viewport.x;
+    int x = (1.f + to.x) / 2 * g_viewport.width;
     float min_y = fminf(to.y, from.y);
     float max_y = fmaxf(to.y, from.y);
     int pix_fill_count = (int)ceilf((max_y - min_y) / pix_height);
-    int y = (1.f - ((1.f + (max_y)) / 2.f)) * g_viewport.height + g_viewport.y;
+    int y = (1.f - ((1.f + (max_y)) / 2.f)) * g_viewport.height;
     for (int i = 0; i < pix_fill_count; ++i) {
-      int final_index = x + (i + y) * tex.width;
-      if (final_index >= t_cap) continue;
-      t[final_index] = g_color;
+      SET_PIX(tex, x, i + y);
     }
   } else if (dy == 0) {
-    int y = (1.f - ((1.f + (to.y)) / 2.f)) * g_viewport.height + g_viewport.y;
+    int y = (1.f - ((1.f + (to.y)) / 2.f)) * g_viewport.height;
     float min_x = fminf(to.x, from.x);
     float max_x = fmaxf(to.x, from.x);
     int pix_fill_count = (int)ceilf((max_x - min_x) / pix_width);
-    int x = (1.f + min_x) / 2 * g_viewport.width + g_viewport.x;
+    int x = (1.f + min_x) / 2 * g_viewport.width;
     for (int i = 0; i < pix_fill_count; ++i) {
-      int final_index = (x + i) + y * tex.width;
-      if (final_index >= t_cap) continue;
-      t[final_index] = g_color;
+      SET_PIX(tex, x + i, y);
     }
   } else if (dx > 0) {
     float x_from = from.x;
@@ -424,21 +424,17 @@ static void br_draw_line(struct tex_s tex, Vector2 from, Vector2 to) {
     int sign_dy = from.y > to.y ? 1 : -1;
     int pix_fill_count_x = (int)ceilf((dx) / pix_width);
     int pix_fill_count_y = (int)ceilf(fabsf(dy) / pix_height);
-    int xi = g_viewport.x + (1.f + x_from) / 2 * g_viewport.width;
-    int yi = g_viewport.y + (1.f - ((1.f + (from.y)) / 2.f)) * g_viewport.height;
+    int xi = (1.f + x_from) / 2 * g_viewport.width;
+    int yi = (1.f - ((1.f + (from.y)) / 2.f)) * g_viewport.height;
     if (pix_fill_count_x > pix_fill_count_y) {
       for (int i = 0; i < pix_fill_count_x; ++i) {
         int yn = yi + sign_dy * ((pix_fill_count_y * i) / pix_fill_count_x);
-        int final_index = (xi + i) + yn * tex.width;
-        if (final_index >= t_cap) continue;
-        t[final_index] = g_color;
+        SET_PIX(tex, xi + i, yn);
       }
     } else {
       for (int i = 0; i < pix_fill_count_y; ++i) {
         int xn = xi + ((pix_fill_count_x * i) / pix_fill_count_y);
-        int final_index = xn + (yi + sign_dy * i) * tex.width;
-        if (final_index >= t_cap) continue;
-        t[final_index] = g_color;
+        SET_PIX(tex, xn, yi + sign_dy * i);
       }
     }
   } else {
@@ -485,12 +481,12 @@ static void br_draw_triangle(struct tex_s tex, Vector2 a, Vector2 b, Vector2 c) 
 
   for (int y = 0; y < g_viewport.height; ++y)
   for (int x = 0; x < g_viewport.width; ++x) {
-    br_ivec2_t p = { x + g_viewport.x, y + g_viewport.y };
+    br_ivec2_t p = { x, y };
     bool apb = is_ccw(ai, p, bi);
     bool bpc = is_ccw(bi, p, ci);
     bool cpa = is_ccw(ci, p, ai);
     if (apb == bpc && bpc == cpa) 
-    SET_PIX(tex, x + g_viewport.x, y + g_viewport.y);
+    SET_PIX(tex, x, y);
   }
 }
 

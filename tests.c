@@ -74,11 +74,14 @@ void case6(void) {
   DrawRectangle(RW/2, RH/2, RW/2, RH/2, YELLOW);
   for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
     DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
+  rlDrawRenderBatchActive();
 
   rlViewport(0, 0, RW/2, RH/2);
   for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
     DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
   DrawCircle(50, 50, 50, BLACK);
+  rlDrawRenderBatchActive();
+
   rlViewport(RW/2, RH/2, RW/2, RH/2);
   for (int i = 0; i < sizeof(lines)/sizeof(lines[0]); ++i)
     DrawLine(lines[i][0], lines[i][1], lines[i][2], lines[i][3], RED);
@@ -100,24 +103,24 @@ void case7(void) {
       rlViewport(c * (RW / cols), r * (RH / rows), w, h);
       float rot = (c + 1) * (1 + r) * 0.1f;
 
-      Vector2 a = (Vector2) { cos(rot), -sin(rot) };
-      Vector2 b = Vector2Rotate(a, 2*PI/3);
-      Vector2 c = Vector2Rotate(b, 2*PI/3);
+      Vector2 a = (Vector2) { cosf(rot), -sinf(rot) };
+      Vector2 b = Vector2Rotate(a, -2*PI/3);
+      Vector2 c = Vector2Rotate(b, -2*PI/3);
       Vector2 arr[] = { a, b, c };
       for (int i = 0; i < 3; ++i) {
+        arr[i] = Vector2Add(arr[i], (Vector2){ 1, 1 });
         arr[i] = Vector2Multiply(arr[i], (Vector2) { w, h });
-        arr[i] = Vector2Add(arr[i], (Vector2){ 3.f*w, 3.f*h });
-        arr[i] = Vector2Scale(arr[i], 0.5);
+        arr[i] = Vector2Scale(arr[i], 1.0f);
       }
-
       DrawTriangle(arr[0], arr[1], arr[2], YELLOW);
+      rlDrawRenderBatchActive();
     }
   }
   EndDrawing();
 }
 
 void run_all_cases(void) {
-#define X(c) do { case ## c (); rlSaveFrame("output/case" #c ".png"); } while (0);
+#define X(c) do { case ## c (); rlViewport(0,0,RW,RH); rlSaveFrame("output/case" #c ".png"); } while (0);
   TESTS(X)
 #undef X
 }
@@ -143,7 +146,14 @@ int main(int argc, char** argv) {
     rlSaveFrame(buff); 
   } else if (argc == 3) {
     int test_num = atoi(argv[1]);
+    SetTargetFPS(30);
     while(WindowShouldClose() == false) {
+      rlViewport(0, 0, RW, RH);
+      if (IsKeyPressed(KEY_J)) {
+        test_num = test_num == 0 ? 0 : (test_num - 1);
+      } else if (IsKeyPressed(KEY_K)) {
+        test_num = test_num + 1 < (sizeof(all_cases) / sizeof(all_cases[0])) ? test_num + 1 : test_num;
+      }
       all_cases[test_num]();
     }
   }
@@ -151,3 +161,4 @@ int main(int argc, char** argv) {
   return 0;
 }
 
+__attribute__((weak)) void rlSaveFrame(const char* name) {}
