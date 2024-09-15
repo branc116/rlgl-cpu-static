@@ -232,6 +232,8 @@ int glfwGetError(const char** out_error) {
 void glfwGetFramebufferSize() {*(volatile int*)0;}
 void glfwGetGamepadState() {*(volatile int*)0;}
 void glfwGetJoystickName() {*(volatile int*)0;}
+void glfwGetKeyName() {*(volatile int*)0;}
+void glfwGetKeyScancode() {*(volatile int*)0;}
 void glfwGetMonitorName() {*(volatile int*)0;}
 void glfwGetMonitorPhysicalSize() {*(volatile int*)0;}
 void glfwGetMonitorPos(void* monitor, int* xpos, int* ypos) { *xpos = *ypos = 0; }
@@ -322,6 +324,7 @@ void glfwSetWindowFocusCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowIconifyCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowMaximizeCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowSizeCallback(void* monitor_h, func_t func) {}
+void glfwSetWindowPosCallback(void* monitor_h, func_t func) {}
 
 #define RL_MODELVIEW_I  0
 #define RL_PROJECTION_I 1

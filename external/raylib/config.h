@@ -146,7 +146,7 @@
 //------------------------------------------------------------------------------------
 // Use QUADS instead of TRIANGLES for drawing when possible
 // Some lines-based shapes could still use lines
-#define SUPPORT_QUADS_DRAW_MODE         1
+//#define SUPPORT_QUADS_DRAW_MODE         1
 
 // rshapes: Configuration values
 //------------------------------------------------------------------------------------
