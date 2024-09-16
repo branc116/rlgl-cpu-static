@@ -6,16 +6,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 
 // gcc -ggdb -O3 -c -o rc.o -DPLATFORM_DESKTOP src/rcore.c & gcc -ggdb -O3 -c -o u.o  -DPLATFORM_DESKTOP src/utils.c & gcc -ggdb -O3 -c -o t.o  -DPLATFORM_DESKTOP src/rtext.c & gcc -ggdb -O3 -c -o tx.o -DPLATFORM_DESKTOP src/rtextures.c & gcc -ggdb -O3 -c -o s.o  -DPLATFORM_DESKTOP src/rshapes.c 
 // gcc -ggdb -fsanitize=address -DPLATFORM_DESKTOP simp.c rc.o u.o t.o tx.o s.o -lm
 // gcc -ggdb -fsanitize=address -DPLATFORM_DESKTOP simp.c rc.o u.o t.o tx.o s.o -lm && time ./a.out && imv -u nearest_neighbour clear.png
 // gcc -DNO_SW -o simp_rl simp.c ./bin/lib/libraylib.a -lm && ./simp_rl
 
-#define BR_ASSERT(EXPR) if (!(EXPR)) *(volatile int*)0;
+#define BR_ASSERT(EXPR) do { \
+  if (!(EXPR)) { \
+    fprintf(stderr, "[" __FILE__ ":%d] Failed to assert: " #EXPR "\n", __LINE__); \
+    exit(1); \
+  } \
+} while(0) \
 
 int g_texture_index;
-int g_texture_active;
+unsigned int g_texture_active;
 struct tex_s {
   void* texture;
   int width;
@@ -23,7 +29,7 @@ struct tex_s {
   int format;
   int mipmaps;
 } g_textures[16];
-#define FRAMEBUFFER g_textures[0]
+#define FRAMEBUFFER (g_textures[0])
 
 void rlSaveFrame(const char* name) {
   Color* pxs = FRAMEBUFFER.texture;
@@ -62,7 +68,7 @@ static bool g_scissor_enabled = true;
 void rlDisableScissorTest(void) {
   g_scissor_enabled = false;
 }
-void rlDisableStereoRender()       { *(volatile int*)0; }
+void rlDisableStereoRender()       { BR_ASSERT(0); }
 void rlDrawRenderBatchActive()     { }
 void rlEnableDepthTest(void) { g_depth_test = true; }
 void rlEnableFramebuffer(int framebuffer) {
@@ -71,8 +77,8 @@ void rlEnableFramebuffer(int framebuffer) {
 void rlEnableScissorTest(void) {
   g_scissor_enabled = true;
 }
-void rlEnableShader()              { *(volatile int*)0; }
-void rlEnableStereoRender()        { *(volatile int*)0; }
+void rlEnableShader()              { BR_ASSERT(0); }
+void rlEnableStereoRender()        { BR_ASSERT(0); }
 typedef struct {
   Vector3 position;
   Vector2 tex_coord;
@@ -84,8 +90,8 @@ int g_vertexies_index;
 void rlEnd(void) {
   BR_ASSERT(g_vertexies_index == 0);
 }
-void rlFramebufferAttach()         { *(volatile int*)0; }
-void rlFramebufferComplete()       { *(volatile int*)0; }
+void rlFramebufferAttach()         { BR_ASSERT(0); }
+void rlFramebufferComplete()       { BR_ASSERT(0); }
 #define RL_MODELVIEW  0x1700      // GL_MODELVIEW
 #define RL_PROJECTION 0x1701      // GL_PROJECTION
 #define RL_TEXTURE    0x1702      // GL_TEXTURE
@@ -96,14 +102,14 @@ int g_matrix_active;
 void rlFrustum(double left, double right, double bottom, double top, double znear, double zfar) {
   ACTIVE_MATRIX = rlMatrixMultiply(rlGetFrustum(left, right, bottom, top, znear, zfar), ACTIVE_MATRIX);
 }
-void rlGenTextureMipmaps()         { *(volatile int*)0; }
+void rlGenTextureMipmaps()         { BR_ASSERT(0); }
 int rlGetActiveFramebuffer(void) { return 1; }
 static double rlCullDistanceNear = 0.01;
 static double rlCullDistanceFar = 1000.0f;
 double rlGetCullDistanceFar(void) { return rlCullDistanceFar; }
 double rlGetCullDistanceNear(void) { return rlCullDistanceNear; }
-void rlGetLocationAttrib()         { *(volatile int*)0; }
-void rlGetLocationUniform()        { *(volatile int*)0; }
+void rlGetLocationAttrib()         { BR_ASSERT(0); }
+void rlGetLocationUniform()        { BR_ASSERT(0); }
 const char* rlGetPixelFormatName(int format) {
     switch (format)
     {
@@ -134,8 +140,8 @@ const char* rlGetPixelFormatName(int format) {
         default: return "UNKNOWN"; break;
     }
 }
-void rlGetShaderIdDefault()        { *(volatile int*)0; }
-void rlGetShaderLocsDefault()      { *(volatile int*)0; }
+void rlGetShaderIdDefault()        { BR_ASSERT(0); }
+void rlGetShaderLocsDefault()      { BR_ASSERT(0); }
 int rlGetVersion()                { return 3; }
 typedef void (*func_t)(void);
 func_t extensions_func_g;
@@ -149,7 +155,7 @@ int rlLoadFramebuffer() {
 void rlLoadIdentity() { 
   ACTIVE_MATRIX = rlMatrixIdentity();
 }
-void rlLoadShaderCode()            { *(volatile int*)0; }
+void rlLoadShaderCode()            { BR_ASSERT(0); }
 
 static void* copy_texture(const void* data, size_t num_elements, int kind) {
   size_t el_size = 0;
@@ -157,18 +163,19 @@ static void* copy_texture(const void* data, size_t num_elements, int kind) {
     case PIXELFORMAT_UNCOMPRESSED_GRAYSCALE: el_size = 1; break;
     case PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA: el_size = 2; break;
     case PIXELFORMAT_UNCOMPRESSED_R8G8B8A8: el_size = 4; break;
-    default: printf("Unknown texture format: %d\n", kind); *(volatile int*)0;
+    default: printf("Unknown texture format: %d\n", kind); BR_ASSERT(0);
   }
   void* ret = malloc(num_elements * el_size);
   memcpy(ret, data, num_elements * el_size);
   return ret;
 }
 
-void rlLoadTexture(void* data, int width, int height, int format, int mipmaps ) {
+unsigned int rlLoadTexture(void* data, int width, int height, int format, int mipmaps ) {
   g_textures[g_texture_index++] = (struct tex_s) { copy_texture(data, width * height, format), width, height, format, mipmaps };
+  return g_texture_index - 1;
 }
-void rlLoadTextureCubemap()        { *(volatile int*)0; }
-void rlLoadTextureDepth()          { *(volatile int*)0; }
+void rlLoadTextureCubemap()        { BR_ASSERT(0); }
+void rlLoadTextureDepth()          { BR_ASSERT(0); }
 void rlMatrixMode(int matrix) { g_matrix_active = matrix - RL_MODELVIEW; }
 void rlMultMatrixf(const float *mat) {
   ACTIVE_MATRIX = rlMatrixMultiply(floats_to_mat(mat), ACTIVE_MATRIX);
@@ -183,8 +190,8 @@ void rlOrtho(double left, double right, double bottom, double top, double znear,
 }
 void rlPopMatrix() { --g_matrix_stacks_index[g_matrix_active]; }
 void rlPushMatrix() { ++g_matrix_stacks_index[g_matrix_active]; ACTIVE_MATRIX = g_matrix_stacks[g_matrix_active][g_matrix_stacks_index[g_matrix_active] - 1]; }
-void rlReadScreenPixels()          { *(volatile int*)0; }
-void rlReadTexturePixels()         { *(volatile int*)0; }
+void rlReadScreenPixels()          { BR_ASSERT(0); }
+void rlReadTexturePixels()         { BR_ASSERT(0); }
 void rlRotatef(float angle, float x, float y, float z) { 
   Matrix matRotation = rlMatrixIdentity();
   // Axis vector (x, y, z) normalization
@@ -236,27 +243,27 @@ br_irectangle g_scissor;
 void rlScissor(int x, int y, int width, int height) {
   g_scissor = (br_irectangle) { x, y, width, height };
 }
-void rlSetBlendMode()              { *(volatile int*)0; }
+void rlSetBlendMode()              { BR_ASSERT(0); }
 void rlSetFramebufferHeight(int height) {
   FRAMEBUFFER.height = height;
 }
 void rlSetFramebufferWidth(int width) {
   FRAMEBUFFER.width = width;
 }
-void rlSetMatrixProjectionStereo() { *(volatile int*)0; }
-void rlSetMatrixViewOffsetStereo() { *(volatile int*)0; }
-void rlSetShader()                 { *(volatile int*)0; }
-void rlSetTexture(int id) {
+void rlSetMatrixProjectionStereo() { BR_ASSERT(0); }
+void rlSetMatrixViewOffsetStereo() { BR_ASSERT(0); }
+void rlSetShader()                 { BR_ASSERT(0); }
+void rlSetTexture(unsigned int id) {
   g_texture_active = id;
 }
-void rlSetUniform()                { *(volatile int*)0; }
-void rlSetUniformMatrix()          { *(volatile int*)0; }
-void rlSetUniformSampler()         { *(volatile int*)0; }
+void rlSetUniform()                { BR_ASSERT(0); }
+void rlSetUniformMatrix()          { BR_ASSERT(0); }
+void rlSetUniformSampler()         { BR_ASSERT(0); }
 Vector2 g_tex_coord;
 void rlTexCoord2f(float x, float y) {
   g_tex_coord = (Vector2) { x, y };
 }
-void rlTextureParameters()         { *(volatile int*)0; }
+void rlTextureParameters()         { BR_ASSERT(0); }
 void rlTranslatef(float x, float y, float z) { 
   Matrix matTranslation = {
     1.0f, 0.0f, 0.0f, x,
@@ -267,51 +274,51 @@ void rlTranslatef(float x, float y, float z) {
 
   ACTIVE_MATRIX = rlMatrixMultiply(matTranslation, ACTIVE_MATRIX);
 }
-void rlUnloadFramebuffer()         { *(volatile int*)0; }
-void rlUnloadShaderProgram()       { *(volatile int*)0; }
+void rlUnloadFramebuffer()         { BR_ASSERT(0); }
+void rlUnloadShaderProgram()       { BR_ASSERT(0); }
 void rlUnloadTexture(int id) {
   //free(g_textures[id].texture);
 }
-void rlUpdateTexture()             { *(volatile int*)0; }
+void rlUpdateTexture()             { BR_ASSERT(0); }
 
-void rlActiveTextureSlot() { *(volatile int*)0; }
+void rlActiveTextureSlot() { BR_ASSERT(0); }
 void rlColor3f(float r, float g, float b) {
   g_color = (Color) { r * 255.f, g * 255.f, b * 255.f, g_color.a };
 }
-void rlDisableBackfaceCulling() { *(volatile int*)0; }
-void rlDisableShader() { *(volatile int*)0; }
-void rlDisableTexture() { *(volatile int*)0; }
-void rlDisableTextureCubemap() { *(volatile int*)0; }
-void rlDisableVertexArray() { *(volatile int*)0; }
-void rlDisableVertexAttribute() { *(volatile int*)0; }
-void rlDisableVertexBuffer() { *(volatile int*)0; }
-void rlDisableVertexBufferElement() { *(volatile int*)0; }
-void rlDisableWireMode() { *(volatile int*)0; }
-void rlDrawVertexArray() { *(volatile int*)0; }
-void rlDrawVertexArrayElements() { *(volatile int*)0; }
-void rlDrawVertexArrayElementsInstanced() { *(volatile int*)0; }
-void rlDrawVertexArrayInstanced() { *(volatile int*)0; }
-void rlEnableBackfaceCulling() { *(volatile int*)0; }
-void rlEnablePointMode() { *(volatile int*)0; }
-void rlEnableTexture() { *(volatile int*)0; }
-void rlEnableTextureCubemap() { *(volatile int*)0; }
-void rlEnableVertexArray() { *(volatile int*)0; }
-void rlEnableVertexAttribute() { *(volatile int*)0; }
-void rlEnableVertexBuffer() { *(volatile int*)0; }
-void rlEnableVertexBufferElement() { *(volatile int*)0; }
-void rlEnableWireMode() { *(volatile int*)0; }
-void rlGetFramebufferHeight() { *(volatile int*)0; }
-void rlGetFramebufferWidth() { *(volatile int*)0; }
-void rlGetMatrixModelview() { *(volatile int*)0; }
-void rlGetMatrixProjection() { *(volatile int*)0; }
-void rlGetMatrixProjectionStereo() { *(volatile int*)0; }
-void rlGetMatrixTransform() { *(volatile int*)0; }
-void rlGetMatrixViewOffsetStereo() { *(volatile int*)0; }
-void rlGetTextureIdDefault() { *(volatile int*)0; }
-void rlIsStereoRenderEnabled() { *(volatile int*)0; }
-void rlLoadVertexArray() { *(volatile int*)0; }
-void rlLoadVertexBuffer() { *(volatile int*)0; }
-void rlLoadVertexBufferElement() { *(volatile int*)0; }
+void rlDisableBackfaceCulling() { BR_ASSERT(0); }
+void rlDisableShader() { BR_ASSERT(0); }
+void rlDisableTexture() { BR_ASSERT(0); }
+void rlDisableTextureCubemap() { BR_ASSERT(0); }
+void rlDisableVertexArray() { BR_ASSERT(0); }
+void rlDisableVertexAttribute() { BR_ASSERT(0); }
+void rlDisableVertexBuffer() { BR_ASSERT(0); }
+void rlDisableVertexBufferElement() { BR_ASSERT(0); }
+void rlDisableWireMode() { BR_ASSERT(0); }
+void rlDrawVertexArray() { BR_ASSERT(0); }
+void rlDrawVertexArrayElements() { BR_ASSERT(0); }
+void rlDrawVertexArrayElementsInstanced() { BR_ASSERT(0); }
+void rlDrawVertexArrayInstanced() { BR_ASSERT(0); }
+void rlEnableBackfaceCulling() { BR_ASSERT(0); }
+void rlEnablePointMode() { BR_ASSERT(0); }
+void rlEnableTexture() { BR_ASSERT(0); }
+void rlEnableTextureCubemap() { BR_ASSERT(0); }
+void rlEnableVertexArray() { BR_ASSERT(0); }
+void rlEnableVertexAttribute() { BR_ASSERT(0); }
+void rlEnableVertexBuffer() { BR_ASSERT(0); }
+void rlEnableVertexBufferElement() { BR_ASSERT(0); }
+void rlEnableWireMode() { BR_ASSERT(0); }
+void rlGetFramebufferHeight() { BR_ASSERT(0); }
+void rlGetFramebufferWidth() { BR_ASSERT(0); }
+void rlGetMatrixModelview() { BR_ASSERT(0); }
+void rlGetMatrixProjection() { BR_ASSERT(0); }
+void rlGetMatrixProjectionStereo() { BR_ASSERT(0); }
+void rlGetMatrixTransform() { BR_ASSERT(0); }
+void rlGetMatrixViewOffsetStereo() { BR_ASSERT(0); }
+void rlGetTextureIdDefault() { BR_ASSERT(0); }
+void rlIsStereoRenderEnabled() { BR_ASSERT(0); }
+void rlLoadVertexArray() { BR_ASSERT(0); }
+void rlLoadVertexBuffer() { BR_ASSERT(0); }
+void rlLoadVertexBufferElement() { BR_ASSERT(0); }
 void rlScalef(float x, float y, float z) {
     Matrix matScale = {
         x, 0.0f, 0.0f, 0.0f,
@@ -322,14 +329,14 @@ void rlScalef(float x, float y, float z) {
 
     ACTIVE_MATRIX = rlMatrixMultiply(matScale, ACTIVE_MATRIX);
 }
-void rlSetMatrixModelview() { *(volatile int*)0; }
-void rlSetMatrixProjection() { *(volatile int*)0; }
-void rlSetVertexAttribute() { *(volatile int*)0; }
-void rlSetVertexAttributeDefault() { *(volatile int*)0; }
-void rlSetVertexAttributeDivisor() { *(volatile int*)0; }
-void rlUnloadVertexArray() { *(volatile int*)0; }
-void rlUnloadVertexBuffer() { *(volatile int*)0; }
-void rlUpdateVertexBuffer() { *(volatile int*)0; }
+void rlSetMatrixModelview() { BR_ASSERT(0); }
+void rlSetMatrixProjection() { BR_ASSERT(0); }
+void rlSetVertexAttribute() { BR_ASSERT(0); }
+void rlSetVertexAttributeDefault() { BR_ASSERT(0); }
+void rlSetVertexAttributeDivisor() { BR_ASSERT(0); }
+void rlUnloadVertexArray() { BR_ASSERT(0); }
+void rlUnloadVertexBuffer() { BR_ASSERT(0); }
+void rlUpdateVertexBuffer() { BR_ASSERT(0); }
 
 static void br_draw_line(struct tex_s tex, const vertex_t* from, const vertex_t* to);
 static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c);
@@ -350,7 +357,7 @@ static void br_try_pop_vertexies(void) {
     br_draw_quad(FRAMEBUFFER, &g_vertexies[0], &g_vertexies[1], &g_vertexies[2], &g_vertexies[3]);
     g_vertexies_index = 0;
   }
-  else *(volatile int*)0;
+  else BR_ASSERT(0);
 }
 
 void rlVertex3f(float x, float y, float z) {
@@ -392,7 +399,7 @@ void rlglInit(unsigned int width, unsigned int height) {
   printf("Init rlgl to %d, %d\n", width, height);
 }
 
-void glfwCreateStandardCursor() {*(volatile int*)0;}
+void glfwCreateStandardCursor() {BR_ASSERT(0);}
 void* g_window = (void*)1;
 const char* g_title;
 int g_width;
@@ -406,21 +413,21 @@ void* glfwCreateWindow(int width, int height, const char* title, void* monitor, 
 }
 void glfwDefaultWindowHints(void) {}
 void glfwDestroyWindow(void* monitor_handle) {}
-void glfwFocusWindow() {*(volatile int*)0;}
-void glfwGetClipboardString() {*(volatile int*)0;}
+void glfwFocusWindow() {BR_ASSERT(0);}
+void glfwGetClipboardString() {BR_ASSERT(0);}
 
 #define GLFW_NO_ERROR 0
 int glfwGetError(const char** out_error) {
   (void)(out_error ? *out_error = NULL : NULL);
   return GLFW_NO_ERROR;
 }
-void glfwGetFramebufferSize() {*(volatile int*)0;}
-void glfwGetGamepadState() {*(volatile int*)0;}
-void glfwGetJoystickName() {*(volatile int*)0;}
-void glfwGetKeyName() {*(volatile int*)0;}
-void glfwGetKeyScancode() {*(volatile int*)0;}
-void glfwGetMonitorName() {*(volatile int*)0;}
-void glfwGetMonitorPhysicalSize() {*(volatile int*)0;}
+void glfwGetFramebufferSize() {BR_ASSERT(0);}
+void glfwGetGamepadState() {BR_ASSERT(0);}
+void glfwGetJoystickName() {BR_ASSERT(0);}
+void glfwGetKeyName() {BR_ASSERT(0);}
+void glfwGetKeyScancode() {BR_ASSERT(0);}
+void glfwGetMonitorName() {BR_ASSERT(0);}
+void glfwGetMonitorPhysicalSize() {BR_ASSERT(0);}
 void glfwGetMonitorPos(void* monitor, int* xpos, int* ypos) { *xpos = *ypos = 0; }
 void glfwGetMonitorWorkarea(void* monitor_handle, int* out_x, int* out_y, int* out_width, int* out_height) {
   *out_x = *out_y = 0;
@@ -433,9 +440,9 @@ void** glfwGetMonitors(int* count) { *count = 1; return monitors;  }
 int glfwGetPlatform(void) {
   return GLFW_PLATFORM_NULL;
 }
-void glfwGetPrimaryMonitor() {*(volatile int*)0;}
+void glfwGetPrimaryMonitor() {BR_ASSERT(0);}
 
-void glfw_get_func() { *(volatile int*)0; }
+void glfw_get_func() { BR_ASSERT(0); }
 
 func_t glfwGetProcAddress(const char* procname) {
   return &glfw_get_func;
@@ -444,34 +451,34 @@ double g_time = 0;
 double glfwGetTime(void) { return g_time += 1.0; }
 struct { int w, h, r, g, b, f; } g_mode = { RW, RH, 8, 8, 8, 60 };
 void* glfwGetVideoMode() { return &g_mode; }
-void glfwGetVideoModes() {*(volatile int*)0;}
-void glfwGetWindowAttrib() {*(volatile int*)0;}
-void glfwGetWindowContentScale() {*(volatile int*)0;}
-void glfwGetWindowMonitor() {*(volatile int*)0;}
+void glfwGetVideoModes() {BR_ASSERT(0);}
+void glfwGetWindowAttrib() {BR_ASSERT(0);}
+void glfwGetWindowContentScale() {BR_ASSERT(0);}
+void glfwGetWindowMonitor() {BR_ASSERT(0);}
 void glfwGetWindowPos(void* window, int* xpos, int* ypos) { *xpos = *ypos = 0; }
-void glfwHideWindow() {*(volatile int*)0;}
-void glfwIconifyWindow() {*(volatile int*)0;}
+void glfwHideWindow() {BR_ASSERT(0);}
+void glfwIconifyWindow() {BR_ASSERT(0);}
 bool glfwInit() { return true; }
 bool glfwJoystickPresent(int i) { return false; }
 void glfwMakeContextCurrent(void* window_handle) {
   printf("Making Current context: %p\n", window_handle);
 }
-void glfwMaximizeWindow() {*(volatile int*)0;}
+void glfwMaximizeWindow() {BR_ASSERT(0);}
 void glfwPollEvents(void) {}
 int glfwRawMouseMotionSupported() { return false; }
-void glfwRestoreWindow() {*(volatile int*)0;}
-void glfwSetClipboardString() {*(volatile int*)0;}
-void glfwSetCursor() {*(volatile int*)0;}
+void glfwRestoreWindow() {BR_ASSERT(0);}
+void glfwSetClipboardString() {BR_ASSERT(0);}
+void glfwSetCursor() {BR_ASSERT(0);}
 void glfwSetCursorPos(void* monitor_handle, int x, int y) {
 
 }
 void glfwSetInputMode(void* monitor_handle, int modes, bool value) {
   printf("Setting input modes %d to: %d\n", modes, value);
 }
-void glfwSetWindowAttrib() {*(volatile int*)0;}
-void glfwSetWindowIcon() {*(volatile int*)0;}
-void glfwSetWindowMonitor() {*(volatile int*)0;}
-void glfwSetWindowOpacity() {*(volatile int*)0;}
+void glfwSetWindowAttrib() {BR_ASSERT(0);}
+void glfwSetWindowIcon() {BR_ASSERT(0);}
+void glfwSetWindowMonitor() {BR_ASSERT(0);}
+void glfwSetWindowOpacity() {BR_ASSERT(0);}
 int g_window_pos_x, g_window_pos_y;
 void glfwSetWindowPos(void* monitor_handle, int x, int y) {
   g_window_pos_x = x, g_window_pos_y = y;
@@ -479,20 +486,20 @@ void glfwSetWindowPos(void* monitor_handle, int x, int y) {
 }
 bool g_should_close;
 void glfwSetWindowShouldClose(bool should) { g_should_close = should; }
-void glfwSetWindowSize() {*(volatile int*)0;}
+void glfwSetWindowSize() {BR_ASSERT(0);}
 void glfwSetWindowSizeLimits(int width, int height) {
   printf("Min size: %d, %d\n", width, height);
 }
-void glfwSetWindowTitle() {*(volatile int*)0;}
-void glfwShowWindow() {*(volatile int*)0;}
+void glfwSetWindowTitle() {BR_ASSERT(0);}
+void glfwShowWindow() {BR_ASSERT(0);}
 void glfwSwapBuffers(void* monitor_handle) {}
 int g_swap_interval;
 void glfwSwapInterval(int interval) {
   g_swap_interval = interval;
 }
 void glfwTerminate(void) {}
-void glfwUpdateGamepadMappings() {*(volatile int*)0;}
-void glfwWaitEvents() {*(volatile int*)0;}
+void glfwUpdateGamepadMappings() {BR_ASSERT(0);}
+void glfwWaitEvents() {BR_ASSERT(0);}
 void glfwWindowHint(int hint, bool value) {printf("Setting window hint %d to %d\n", hint, value);}
 bool glfwWindowShouldClose(void* monitor_handle) { return false; }
 
@@ -508,7 +515,7 @@ void* g_error_callback;
 void glfwSetErrorCallback(void (*ec)(int error, const char *description)) { g_error_callback = ec; }
 void* g_joystic_callback;
 void glfwSetJoystickCallback(void* cb) { g_joystic_callback = cb; }
-void glfwSetWindowContentScaleCallback() {*(volatile int*)0;}
+void glfwSetWindowContentScaleCallback() {BR_ASSERT(0);}
 void glfwSetWindowFocusCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowIconifyCallback(void* monitor_h, func_t func) {}
 void glfwSetWindowMaximizeCallback(void* monitor_h, func_t func) {}
@@ -568,7 +575,7 @@ static Vector3 br_clamp_v3(Vector3 x, float m, float M) {
     if (g_texture_active == 0) { \
       ((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)] = g_color; \
     } else { \
-      *(volatile int*)0; \
+      BR_ASSERT(0); \
     } \
   } \
 } while (0)
@@ -589,7 +596,7 @@ Color br_sample_texture(struct tex_s* tex, float x, float y) {
     } break;
     default: {
       printf("Unknown texture format: %d\n", tex->format);
-      *(volatile int*)0;
+      BR_ASSERT(0);
     } break;
   }
   return BLACK;
@@ -610,7 +617,7 @@ void br_blend(Color* c, Color in) {
       Color c = br_sample_texture(&g_textures[g_texture_active], TX, TY); \
       br_blend(&((Color*)(TEX).texture)[final_x + (final_y * (TEX).width)], c); \
     } else { \
-      *(volatile int*)0; \
+      BR_ASSERT(0); \
     } \
   } \
 } while (0)
@@ -711,6 +718,14 @@ static float br_ivec2_dist(br_ivec2_t a, br_ivec2_t b) {
   return sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
+static inline int br_maxi(int a, int b) {
+  return a > b ? a : b;
+}
+
+static inline int br_mini(int a, int b) {
+  return a < b ? a : b;
+}
+
 static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t* b, const vertex_t* c) {
   switch (g_draw_mode) {
     case GL_LINE:
@@ -731,9 +746,14 @@ static void br_draw_triangle(struct tex_s tex, const vertex_t* a, const vertex_t
   br_get_raster_point(a, &ai);
   br_get_raster_point(b, &bi);
   br_get_raster_point(c, &ci);
+  int fromy =  br_maxi(br_mini(br_mini(ai.y, bi.y), ci.y), 0);
+  int toy =    br_mini(br_maxi(br_maxi(ai.y, bi.y), ci.y), g_viewport.height);
+  int fromx =  br_maxi(br_mini(br_mini(ai.x, bi.x), ci.x), 0);
+  int tox =    br_mini(br_maxi(br_maxi(ai.x, bi.x), ci.x), g_viewport.width);
 
-  for (int y = 0; y < g_viewport.height; ++y)
-  for (int x = 0; x < g_viewport.width; ++x) {
+
+  for (int y = fromy; y <= toy; ++y)
+  for (int x = fromx; x <= tox; ++x) {
     br_ivec2_t p = { x, y };
     bool apb = is_ccw(ai, p, bi);
     bool bpc = is_ccw(bi, p, ci);
