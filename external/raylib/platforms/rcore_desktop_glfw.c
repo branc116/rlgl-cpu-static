@@ -134,15 +134,13 @@ static void JoystickCallback(int jid, int event);                               
 // Module Functions Definition: Window and Graphics Device
 //----------------------------------------------------------------------------------
 
+int br_frames_count = 1;
 // Check if application should close
 // NOTE: By default, if KEY_ESCAPE pressed or window close icon clicked
 bool WindowShouldClose(void)
 {
-  static int frames_count = 1;
-  if (--frames_count < 0) {
-    return true;
-  }
-  printf("Frame count: %d\n", frames_count);
+  if (--br_frames_count < 0) return true;
+
   if (CORE.Window.ready) return CORE.Window.shouldClose;
   else return true;
 }

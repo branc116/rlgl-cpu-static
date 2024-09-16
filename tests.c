@@ -159,8 +159,10 @@ case_t all_cases[] = {
 #undef X
 };
 
+extern int br_frames_count;
 int main(int argc, char** argv) {
   InitWindow(RW, RH, "hi");
+  br_frames_count = 1000000;
 
   if (argc == 1) {
     run_all_cases();
