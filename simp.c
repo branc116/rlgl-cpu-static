@@ -655,25 +655,7 @@ static void br_draw_line(struct tex_s tex, const vertex_t* a, const vertex_t* b)
 
   float dx = to.x - from.x;
   float dy = to.y - from.y;
-  if (dx == 0) {
-    int x = (1.f + to.x) / 2 * g_viewport.width;
-    float min_y = fminf(to.y, from.y);
-    float max_y = fmaxf(to.y, from.y);
-    int pix_fill_count = (int)ceilf((max_y - min_y) / pix_height);
-    int y = (1.f - ((1.f + (max_y)) / 2.f)) * g_viewport.height;
-    for (int i = 0; i < pix_fill_count; ++i) {
-      SET_PIX(tex, x, i + y);
-    }
-  } else if (dy == 0) {
-    int y = (1.f - ((1.f + (to.y)) / 2.f)) * g_viewport.height;
-    float min_x = fminf(to.x, from.x);
-    float max_x = fmaxf(to.x, from.x);
-    int pix_fill_count = (int)ceilf((max_x - min_x) / pix_width);
-    int x = (1.f + min_x) / 2 * g_viewport.width;
-    for (int i = 0; i < pix_fill_count; ++i) {
-      SET_PIX(tex, x + i, y);
-    }
-  } else if (dx > 0) {
+  if (true) {
     float x_from = from.x;
     float x_to = to.x;
 
@@ -683,13 +665,25 @@ static void br_draw_line(struct tex_s tex, const vertex_t* a, const vertex_t* b)
     int xi = (1.f + x_from) / 2 * g_viewport.width;
     int yi = (1.f - ((1.f + (from.y)) / 2.f)) * g_viewport.height;
     if (pix_fill_count_x > pix_fill_count_y) {
+      int acu = 0;
+      int yn = yi;
       for (int i = 0; i < pix_fill_count_x; ++i) {
-        int yn = yi + sign_dy * ((pix_fill_count_y * i) / pix_fill_count_x);
+        acu += pix_fill_count_y;
+        if (acu > pix_fill_count_x) {
+          yn += sign_dy;
+          acu -= pix_fill_count_x;
+        }
         SET_PIX(tex, xi + i, yn);
       }
     } else {
+      int xn = xi;
+      int acu = 0;
       for (int i = 0; i < pix_fill_count_y; ++i) {
-        int xn = xi + ((pix_fill_count_x * i) / pix_fill_count_y);
+        acu += pix_fill_count_x;
+        if (acu > pix_fill_count_y) {
+          ++xn;
+          acu -= pix_fill_count_y;
+        }
         SET_PIX(tex, xn, yi + sign_dy * i);
       }
     }
